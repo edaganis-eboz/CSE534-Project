@@ -1,11 +1,25 @@
 # This will be the clients. This *should* be written entirely in python
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES
+
+
+class Client_Data_Plane():
+    # SecY is on the data plane
+    def __init__(self):
+        pass
+
+class Client_Control_Plane():
+    # KaY is on the control plane
+    def __init__(self):
+        pass
 
 class Client():
-    
+
     def __init__(self):
         self.RSA_key_path = "./client_tools/key.pem"
         self.RSA_key = None
+        self.Data_plane = Client_Data_Plane()
+        self.Control_Plane = Client_Control_Plane()
         try:
             self.load_key()
             print(f"Sucessfully loaded key: {self.RSA_key_path}")
@@ -30,13 +44,6 @@ class Client():
             data = f.read()
             self.RSA_key = RSA.import_key(data)
 
-    def create_cipher(self):
-        pass
-
-
-    def create_secure_channel(self, cipher):
-        # This is either going to be in the clients or in the switches
-        pass
 
 if __name__ == "__main__":
     x = Client()
