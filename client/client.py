@@ -1,29 +1,19 @@
 # This will be the clients. This *should* be written entirely in python
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
-import sys
+from Crypto.Hash import SHA256
+from Crypto.Signature import pkcs1_15
 
-class Secure_Association():
-    """
-    Afterwards,
-it (KaY) creates and maintains secure channels (SCs) between the
-MACsec peers that are used by the SecY to transmit and re-
-ceive network packets. SCs are sender-specific, unidirectional,
-point-to-multipoint channels. Each SC holds multiple secure
-associations (SAs) that have a secure association key (SAK)
-used for encrypting, decrypting, and authenticating packets
-    """
+
+
+class MAC_Security_Entity():
     def __init__(self):
-        self.key = b'0123456789ABCDEF'
-        self.cipher = AES.new(self.key, AES.MODE_GCM)
-
-
-
+        pass
 
 class Client_Data_Plane():
     # SecY is on the data plane
     def __init__(self):
-        pass
+        self.SecY = MAC_Security_Entity()
 
     def send_via_SC(self, data):
         # This is where we would have Scapy, either a class or a function, that would send our frame with the proper formatting
@@ -45,12 +35,25 @@ What MACsec Does Not Encrypt:
     The integrity check value (ICV) that ensures data integrity.
            """
         pass
-
-    
-
-class Client_Control_Plane():
-    # KaY is on the control plane
+class Secure_Association():
+    """
+    Afterwards,
+it (KaY) creates and maintains secure channels (SCs) between the
+MACsec peers that are used by the SecY to transmit and re-
+ceive network packets. SCs are sender-specific, unidirectional,
+point-to-multipoint channels. Each SC holds multiple secure
+associations (SAs) that have a secure association key (SAK)
+used for encrypting, decrypting, and authenticating packets
+    """
     def __init__(self):
+        self.key = b'0123456789ABCDEF'
+        self.cipher = AES.new(self.key, AES.MODE_GCM)
+
+class Key_Agreement_Entity():
+    def __init__(self):
+        pass
+
+    def MKA(self):
         pass
 
     def create_SC(self, dest):
@@ -58,6 +61,13 @@ class Client_Control_Plane():
 
     def create_SA(self, dest):
         pass
+
+
+class Client_Control_Plane():
+    # KaY is on the control plane
+    def __init__(self):
+        self.KaY = Key_Agreement_Entity()
+
 
 class Client():
 
@@ -86,6 +96,14 @@ class Client():
         except:
             print("Key generation failed! Exiting...")
             exit(1)
+
+    def create_CSR(self):
+        # For the sake of simplicity, I'm going to define my own Certificate Signing Request and Certificate format
+        pass
+
+
+    def DEBUG_self_sign_cert(self):
+        pass
 
 
     def load_key(self):
