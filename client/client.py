@@ -13,17 +13,17 @@ class MAC_Security_Entity():
 class Client_Data_Plane():
     # SecY is on the data plane
     def __init__(self):
+        self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
         self.SecY = MAC_Security_Entity()
 
-    def send_via_SC(self, data):
+    def send_via_SA(self, data, SA):
         # This is where we would have Scapy, either a class or a function, that would send our frame with the proper formatting
-        # probably a function like, def create_secure_packet(self, dest_mac, dest_ip, dest_port, data)
         # Format would be, (from the paper) MAC_SRC MAC_DST SECTAG |ENCRYPTED DATA| ICV
-   
+        # Use SA.cipher, to encrypt and do the ICV calculation and what not, SA.cipher is our Secure Assocation Key (SAK) for all intents and purposes
         pass
 
-    def send_cleartext(self, data, src, dst):  
-        frame = Ether(src=src[0], dst=dst[0]) / IP(src=src[1], dst=dst[1]) / UDP(dport=dst[2], sport=src[2]) / data
+    def send_cleartext(self, data, dst):  
+        frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
         # packet = IP(dst=dst[1]) / UDP(dport=dst[2], sport=src[2]) / data
         # send(packet)
         try:
@@ -36,6 +36,7 @@ class Client_Data_Plane():
     
 class Secure_Association():
     def __init__(self):
+        self.destination = ("MAC_ADDR", "IP_ADDR", "PORT")
         self.key = b'0123456789ABCDEF'
         self.cipher = AES.new(self.key, AES.MODE_GCM)
 
@@ -69,7 +70,6 @@ class Client():
         self.RSA_key = None
         self.Data_Plane = Client_Data_Plane()
         self.Control_Plane = Client_Control_Plane()
-        self.address = ("00:00:00:00:00:00", "127.0.0.1", 1337) # Loopback addr for testing
         try:
             self.load_key()
             print(f"Sucessfully loaded key: {self.RSA_key_path}")
@@ -108,8 +108,16 @@ class Client():
 
     def send_cleartext(self, data, dst_mac, dst_ip, dst_port):
         dst = (dst_mac, dst_ip, dst_port)
-        self.Data_Plane.send_cleartext(data, self.address, dst)
+        self.Data_Plane.send_cleartext(data, dst)
 
 if __name__ == "__main__":
     x = Client()
     x.send_cleartext(b"Hello!\n","ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
+
+
+
+    #####
+    # Probably the way this will work is smth like, suppose we want to send a MACsec message to someone. We first go through the control plane to resolve the address to our SA,
+    # Then the control_plane object will return an SA, we will then use that SA as an input to a Data_Plane object function, send_via_SA. Then we can send our MACsec frames through
+    # there
+    #####
