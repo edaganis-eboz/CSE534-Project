@@ -3,7 +3,8 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Signature import pkcs1_15
-from scapy.all import Ether, IP, UDP, sendp, send
+from scapy.all import Ether, IP, UDP, sendp, send, Raw
+from scapy.utils import hexdump
 
 
 class MAC_Security_Entity():
@@ -20,7 +21,26 @@ class Client_Data_Plane():
         # This is where we would have Scapy, either a class or a function, that would send our frame with the proper formatting
         # Format would be, (from the paper) MAC_SRC MAC_DST SECTAG |ENCRYPTED DATA| ICV
         # Use SA.cipher, to encrypt and do the ICV calculation and what not, SA.cipher is our Secure Assocation Key (SAK) for all intents and purposes
-        pass
+        frame = Ether(src=self.src[0], dst=SA.destination[0])
+        sectag = b"SECTAG"
+
+        ciphertext, tag = SA.cipher.encrypt_and_digest(data)
+
+        icv = tag
+
+        macSecFrame = frame / Raw(load=sectag) / Raw(load=ciphertext) / Raw(load=icv)
+
+        try:
+            sendp(macSecFrame)
+            print(f"MACsec frame: {macSecFrame}")
+            if Raw in macSecFrame:
+                print("Raw Payload:")
+                frame.show()  # Display the entire packet
+                hexdump(macSecFrame)  # Print the raw data in hex format
+            return 0
+        except Exception as e:
+            print(f"Error: {e}")
+            return -1
 
     def send_cleartext(self, data, dst):  
         frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
@@ -31,8 +51,6 @@ class Client_Data_Plane():
             return 0
         except Exception as e:
             return -1
-
-        
     
 class Secure_Association():
     def __init__(self):
@@ -111,13 +129,15 @@ class Client():
         self.Data_Plane.send_cleartext(data, dst)
 
 if __name__ == "__main__":
-    x = Client()
-    x.send_cleartext(b"Hello!\n","ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
-
+    client = Client()
+    SA = Secure_Association()
+    SA.destination = ("ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
+    client.send_cleartext(b"Hello!\n","ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
+    client.Data_Plane.send_via_SA(b"test\n", SA)
 
 
     #####
     # Probably the way this will work is smth like, suppose we want to send a MACsec message to someone. We first go through the control plane to resolve the address to our SA,
-    # Then the control_plane object will return an SA, we will then use that SA as an input to a Data_Plane object function, send_via_SA. Then we can send our MACsec frames through
+    # Then the cnontrol_plane object will return an SA, we will then use that SA as an input to a Data_Plane object function, send_via_SA. Then we can send our MACsec frames through
     # there
     #####
