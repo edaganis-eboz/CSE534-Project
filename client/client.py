@@ -3,7 +3,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Signature import pkcs1_15
-
+from scapy.all import Ether, IP, UDP, sendp, send
 
 
 class MAC_Security_Entity():
@@ -19,49 +19,42 @@ class Client_Data_Plane():
         # This is where we would have Scapy, either a class or a function, that would send our frame with the proper formatting
         # probably a function like, def create_secure_packet(self, dest_mac, dest_ip, dest_port, data)
         # Format would be, (from the paper) MAC_SRC MAC_DST SECTAG |ENCRYPTED DATA| ICV
-        """
-        What MACsec Protects:
-
-MACsec encrypts and protects most of the Ethernet frame's payload, including:
-
-    The payload (data) portion of the Ethernet frame. I.e. IP header & TCP header
-    Some of the Layer 2 headers, like the EtherType.
-    The optional VLAN tags (if present in the frame).
-
-What MACsec Does Not Encrypt:
-
-    MAC addresses: The source and destination MAC addresses remain in plaintext because they are essential for Layer 2 switching and routing.
-    SecTAG (Security Tag): This is a special tag added to the frame to carry MACsec-related information like the Secure Channel Identifier (SCI) and packet numbering for replay protection. The SecTAG is also sent in the clear.
-    The integrity check value (ICV) that ensures data integrity.
-           """
+   
         pass
+
+    def send_cleartext(self, data, src, dst):  
+        frame = Ether(src=src[0], dst=dst[0]) / IP(src=src[1], dst=dst[1]) / UDP(dport=dst[2], sport=src[2]) / data
+        # packet = IP(dst=dst[1]) / UDP(dport=dst[2], sport=src[2]) / data
+        # send(packet)
+        try:
+            sendp(frame)
+            return 0
+        except Exception as e:
+            return -1
+
+        
+    
 class Secure_Association():
-    """
-    Afterwards,
-it (KaY) creates and maintains secure channels (SCs) between the
-MACsec peers that are used by the SecY to transmit and re-
-ceive network packets. SCs are sender-specific, unidirectional,
-point-to-multipoint channels. Each SC holds multiple secure
-associations (SAs) that have a secure association key (SAK)
-used for encrypting, decrypting, and authenticating packets
-    """
     def __init__(self):
         self.key = b'0123456789ABCDEF'
         self.cipher = AES.new(self.key, AES.MODE_GCM)
 
-class Key_Agreement_Entity():
+class Secure_Channel():
     def __init__(self):
         pass
+
+    def create_SA(self, dest):
+        pass
+
+class Key_Agreement_Entity():
+    def __init__(self):
+        self.key_ring = None
 
     def MKA(self):
         pass
 
     def create_SC(self, dest):
         pass
-
-    def create_SA(self, dest):
-        pass
-
 
 class Client_Control_Plane():
     # KaY is on the control plane
@@ -74,8 +67,9 @@ class Client():
     def __init__(self):
         self.RSA_key_path = "./client_tools/key.pem"
         self.RSA_key = None
-        self.Data_plane = Client_Data_Plane()
+        self.Data_Plane = Client_Data_Plane()
         self.Control_Plane = Client_Control_Plane()
+        self.address = ("00:00:00:00:00:00", "127.0.0.1", 1337) # Loopback addr for testing
         try:
             self.load_key()
             print(f"Sucessfully loaded key: {self.RSA_key_path}")
@@ -112,5 +106,10 @@ class Client():
             self.RSA_key = RSA.import_key(data)
 
 
+    def send_cleartext(self, data, dst_mac, dst_ip, dst_port):
+        dst = (dst_mac, dst_ip, dst_port)
+        self.Data_Plane.send_cleartext(data, self.address, dst)
+
 if __name__ == "__main__":
     x = Client()
+    x.send_cleartext(b"Hello!\n","ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
