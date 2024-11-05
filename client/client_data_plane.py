@@ -138,11 +138,24 @@ class Client_Data_Plane():
         self.SecY = MAC_Security_Entity()
 
     def send_cleartext(self, data, dst):  
-        frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
-        # packet = IP(dst=dst[1]) / UDP(dport=dst[2], sport=src[2]) / data
-        # send(packet)
+        # frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
+        # try:
+        #     sendp(frame, iface="lo0")
+        #     return 0
+        # except Exception as e:
+        #     return -1
+        packet = IP(src="127.0.0.1", dst="127.0.0.1") / UDP(dport=12345, sport=1337) / b'Hello'
+        send(packet)
+
+    def cleartext_listen(self):
+        def cleartext_handler(frame):
+            if Ether in frame:
+                print("Received Ethernet frame:", frame.summary())
+                print("Payload:", frame[Ether].payload)
+
         try:
-            sendp(frame)
-            return 0
+            sniff(prn=cleartext_handler, store=0)
         except Exception as e:
-            return -1
+            print(f"Sniffing failed: {e}")
+
+        

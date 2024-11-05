@@ -5,12 +5,11 @@ from client_control_plane import Client_Control_Plane, Secure_Association, Secur
 from client_data_plane import Client_Data_Plane
 
 class Client():
-
-    def __init__(self):
+    def __init__(self, KaY_identifier):
         self.RSA_key_path = "./client_tools/key.pem"
         self.RSA_key = None
         self.Data_Plane = Client_Data_Plane()
-        self.Control_Plane = Client_Control_Plane('Alice')
+        self.Control_Plane = Client_Control_Plane(KaY_identifier)
         try:
             self.load_key()
             print(f"Sucessfully loaded key: {self.RSA_key_path}")
@@ -66,6 +65,9 @@ class Client():
             self.Control_Plane.KaY.print_SCs()
             sa_ID = self.Control_Plane.KaY.create_SA(sc_ID, self.Control_Plane.KaY.CA_hosts['Bob'])
             self.Control_Plane.KaY.print_SAs(sc_ID)
+        elif choice == 1:
+            destination = ("ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
+            self.Data_Plane.send_cleartext(b'TEST', destination)
         else:
             pass
 
@@ -75,8 +77,8 @@ class Client():
 
 
 if __name__ == "__main__":
-    client = Client()
-    client.run_test(0)
+    client = Client('Alice')
+    client.run_test(1)
     # sc_identifier = client.Control_Plane.KaY.create_SC()   # We def need better calling conventions
 
    
