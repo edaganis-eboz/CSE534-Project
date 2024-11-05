@@ -15,7 +15,7 @@ class Secure_Channel():
 class Key_Agreement_Entity():
     def __init__(self, identifier):
         self.KaY_indentifier = identifier
-        self.hosts = {}
+        self.CA_hosts = {}
         self.secure_channels = {}
 
     def load_known_hosts(self):
@@ -26,13 +26,12 @@ class Key_Agreement_Entity():
             with open('hosts.txt', 'r') as f:
                 for line in f:
                     parts = line.split()
-                    self.hosts[parts[0]] = (parts[1], parts[2], int(parts[3]))
+                    self.CA_hosts[parts[0]] = (parts[1], parts[2], int(parts[3]))
         except Exception as e:
             print('Failed to load hosts.txt')
 
     def MKA(self):
         pass
-
 
     # We def need some error checking for these functions
     def create_SC(self):
@@ -55,6 +54,34 @@ class Key_Agreement_Entity():
         secure_channel = self.get_SC(sc_ID)
         secure_association = secure_channel.associations.get(sa_ID)
         return secure_association
+    
+    def resolve_address(self, destination):
+        for KaY_indentifier in self.CA_hosts:
+            if destination == self.CA_hosts[KaY_indentifier]:
+                return f"{destination}({KaY_indentifier})"
+        return f"{destination}(Unknown)"
+    
+    #### PRINTING FUNCTIONS ####
+    def print_CA(self):
+        for index, host in enumerate(self.CA_hosts):
+            print(f"[{index}] {host}: {self.CA_hosts[host]}")
+    
+    def print_SCs(self):
+        if len(self.secure_channels) == 0:
+            print("No Secure Channels")
+        else:
+            for index, sc in enumerate(self.secure_channels):
+                print(f"[{index}] Secure Channel ID: {sc}")
+
+    def print_SAs(self, sc_ID):
+        sc = self.get_SC(sc_ID)
+        if len(sc.associations) == 0:
+            print(f"Secure Channel {sc_ID} has no Secure Associations")
+        else:
+            print(f"Secure Channel: {sc_ID}")    
+            for index, sa in enumerate(sc.associations.values()):
+                print(f"[{index}] Secure Association ID: {sa.sa_identifier} -> {self.resolve_address(sa.destination)}")
+
 
 class Client_Control_Plane():
     # KaY is on the control plane
