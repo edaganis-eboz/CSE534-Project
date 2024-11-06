@@ -4,6 +4,8 @@ from scapy.utils import hexdump
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Signature import pkcs1_15
+import threading
+import queue
 
 from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
 
@@ -130,23 +132,22 @@ class MAC_Security_Entity():
         new_SA = Secure_Association(sa_ID, dest)
         self.secure_association.append(new_SA)
 
-class Client_Data_Plane():
-    # SecY is on the data plane
+class Cleartext_Handler():
     def __init__(self):
-        self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
-
-        self.SecY = MAC_Security_Entity()
-
-    def send_cleartext(self, data, dst):  
-        frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
+        self.queue = queue.Queue()
+        self.home_address = None
+    
+    @staticmethod
+    def send_cleartext(src, data, dst):  
+        frame = Ether(src=src[0], dst=dst[0]) / IP(src=src[1], dst=dst[1]) / UDP(dport=dst[2], sport=src[2]) / data
         try:
-            sendp(frame, iface="lo")
+            sendp(frame, iface="lo") # TODO: change iface when in production
             return 0
         except Exception as e:
             return -1
 
     def cleartext_listen(self):
-        def cleartext_handler(frame):
+        def handle(frame):
             if UDP in frame and frame[UDP].dport == self.src[2]:
                 print("Received UDP packet:")
                 print(f"Source IP: {frame[IP].src}")
@@ -156,9 +157,27 @@ class Client_Data_Plane():
 
         try:
             print(f"Listening for UDP packets on port {self.src[2]}...")
-            sniff(iface="lo", prn=cleartext_handler, store=0)
+            sniff(iface="lo", prn=handle, store=0)
         except Exception as e:
             print(f"Sniffing failed: {e}")
+
+
+class Client_Data_Plane():
+    # SecY is on the data plane
+    def __init__(self):
+        self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
+        self.cleartext_handler = Cleartext_Handler()
+        self.SecY = MAC_Security_Entity()
+        try:
+            self.cleartext_handler.start_listen()
+        except Exception as e:
+            print("Cleartext listener failed to start....")
+
+    def send_cleartext(self, data, dst):
+        self.cleartext_handler.send_cleartext(self.src, data, dst)
+
+    
+
 
 
         

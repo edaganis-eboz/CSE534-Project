@@ -6,3 +6,6 @@ implement threading:
 
     each SA needs to run in its own thread
     Some sort of link from an SA in KaY to a thread in SecY
+
+
+    Move SA and SC's into their own file, maybe put the protocol messages + protocol headers in there as well. util.py?
