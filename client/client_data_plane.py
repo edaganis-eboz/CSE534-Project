@@ -7,7 +7,6 @@ from Crypto.Signature import pkcs1_15
 
 from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
 
-
 class MAC_Security_Entity():
     def __init__(self):
         pass
@@ -135,27 +134,33 @@ class Client_Data_Plane():
     # SecY is on the data plane
     def __init__(self):
         self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
+
         self.SecY = MAC_Security_Entity()
 
     def send_cleartext(self, data, dst):  
-        # frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
-        # try:
-        #     sendp(frame, iface="lo0")
-        #     return 0
-        # except Exception as e:
-        #     return -1
-        packet = IP(src="127.0.0.1", dst="127.0.0.1") / UDP(dport=12345, sport=1337) / b'Hello'
-        send(packet)
+        frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
+        try:
+            sendp(frame, iface="lo")
+            return 0
+        except Exception as e:
+            return -1
 
     def cleartext_listen(self):
         def cleartext_handler(frame):
-            if Ether in frame:
-                print("Received Ethernet frame:", frame.summary())
-                print("Payload:", frame[Ether].payload)
+            if UDP in frame and frame[UDP].dport == self.src[2]:
+                print("Received UDP packet:")
+                print(f"Source IP: {frame[IP].src}")
+                print(f"Source Port: {frame[UDP].sport}")
+                print(f"Destination Port: {frame[UDP].dport}")
+                print(f"Payload: {frame[Raw] if Raw in frame else 'No payload'}")
 
         try:
-            sniff(prn=cleartext_handler, store=0)
+            print(f"Listening for UDP packets on port {self.src[2]}...")
+            sniff(iface="lo", prn=cleartext_handler, store=0)
         except Exception as e:
             print(f"Sniffing failed: {e}")
+
+    def fun(self):
+        print("fun")
 
         

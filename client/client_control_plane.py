@@ -1,11 +1,18 @@
 from random import randint
+from enum import Enum
+from os import urandom
+
 class Secure_Association():
-    def __init__(self, sc_ID, sa_ID, dest):
+    def __init__(self, sc_ID, sa_ID, dest, key, type):
         self.sc_identifier = sc_ID # This might be useful
         self.sa_identifier = sa_ID #placeholder
         self.destination = dest #("MAC_ADDR", "IP_ADDR", "PORT")
-        self.key = b'0123456789ABCDEF'
+        self.key = key
+        self.type = self.SA_Type(0)
         self.cipher = None
+    class SA_Type(Enum):
+        OUTGOING = 0
+        INCOMMING = 1
 
 class Secure_Channel():
     def __init__(self, sc_ID):
@@ -14,6 +21,7 @@ class Secure_Channel():
 
 class Key_Agreement_Entity():
     def __init__(self, identifier):
+        self.Data_Plane = None
         self.KaY_indentifier = identifier
         self.CA_hosts = {}
         self.secure_channels = {}
@@ -30,9 +38,6 @@ class Key_Agreement_Entity():
         except Exception as e:
             print('Failed to load hosts.txt')
 
-    def MKA(self):
-        pass
-
     # We def need some error checking for these functions
     def create_SC(self):
         sc_ID = randint(10000, 65535)
@@ -43,11 +48,11 @@ class Key_Agreement_Entity():
     def get_SC(self, sc_ID):
         return self.secure_channels.get(sc_ID)
     
-    def create_SA(self, sc_ID, dest):
+    def create_SA(self, sc_ID, dest, key, type):
         sa_ID = randint(10000, 65535)
-        sa = Secure_Association(sc_ID, sa_ID, dest)
-        SC = self.secure_channels[sc_ID]
-        SC.associations[sa_ID] = sa
+        sa = Secure_Association(sc_ID, sa_ID, dest, key)
+        sc = self.secure_channels[sc_ID]
+        sc.associations[sa_ID] = sa
         return sa_ID
 
     def get_SA(self, sc_ID, sa_ID):
@@ -85,5 +90,40 @@ class Key_Agreement_Entity():
 
 class Client_Control_Plane():
     # KaY is on the control plane
-    def __init__(self, identifier):
+    def __init__(self, Data_Plane, identifier, RSA_Key):
         self.KaY = Key_Agreement_Entity(identifier)
+        self.Data_Plane = Data_Plane
+    class KE_Protocol_Messages(Enum):
+        SA_KE_REQUEST = b'SA_KE_REQUEST'
+        SA_KE_ACCEPT = b'SA_KE_ACCEPT'
+
+    # Key exchange is hella broken
+    # This needs to be in try except blocks as well
+    def key_exchange_start(self, dest): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY
+        self.Data_Plane.send_cleartext(self.KE_Protocol_Messages.SA_KE_REQUEST, dest)
+        response = self.Data_Plane.get_response()
+        if response == self.KE_Protocol_Messages.SA_KE_ACCEPT:
+            self.Data_Plane.send_cleartext(RSA_Key)
+            encrypted_shared_secret = self.Data_Plane.get_response()
+            shared_secret = None
+            return shared_secret
+        else:
+            return None
+        
+    def key_exchange_respond(self, request_frame):
+        self.Data_Plane.send_cleartext(self.KE_Protocol_Messages.SA_KE_ACCEPT)
+        pubkey = self.Data_Plane.get_response()
+        secret = urandom(256)
+        encrypted_secret = encrypt(pubkey, secret)
+        self.Data_Plane.send_cleartext(encrypted_secret)
+        # create a incomming SA
+
+
+    def create_SA(self, sc_ID, dest, type):
+        shared_secret = self.key_exchange(dest)
+        if shared_secret != None:
+            self.KaY.create_SA(sc_ID, dest, shared_secret, type)
+        else:
+            print("Key Exchange Failed")
+
+        

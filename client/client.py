@@ -1,6 +1,7 @@
 from Crypto.PublicKey import RSA
 import threading
 import time
+import random
 from client_control_plane import Client_Control_Plane, Secure_Association, Secure_Channel
 from client_data_plane import Client_Data_Plane
 
@@ -9,7 +10,7 @@ class Client():
         self.RSA_key_path = "./client_tools/key.pem"
         self.RSA_key = None
         self.Data_Plane = Client_Data_Plane()
-        self.Control_Plane = Client_Control_Plane(KaY_identifier)
+        self.Control_Plane = Client_Control_Plane(self.Data_Plane, KaY_identifier)
         try:
             self.load_key()
             print(f"Sucessfully loaded key: {self.RSA_key_path}")
@@ -36,7 +37,9 @@ class Client():
             data = f.read()
             self.RSA_key = RSA.import_key(data)
 
-
+    def update_hosts(self):
+        pass
+    
     def send_cleartext(self, data, dst_mac, dst_ip, dst_port):
         dst = (dst_mac, dst_ip, dst_port)
         self.Data_Plane.send_cleartext(data, dst)
@@ -66,8 +69,19 @@ class Client():
             sa_ID = self.Control_Plane.KaY.create_SA(sc_ID, self.Control_Plane.KaY.CA_hosts['Bob'])
             self.Control_Plane.KaY.print_SAs(sc_ID)
         elif choice == 1:
-            destination = ("ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
-            self.Data_Plane.send_cleartext(b'TEST', destination)
+            listen_or_send = int(input("Options:\n(0) Listen\n(1) Send\n")) % 2
+            if listen_or_send: # 1
+                destination_port = int(input("Destination Port? "))
+                destination = ("ff:ff:ff:ff:ff:ff", "127.0.0.1", destination_port)
+                self.Data_Plane.send_cleartext(b'TEST', destination)
+            else:
+                port_num = random.randint(10000, 65535)
+                mac, ip, _ = self.Data_Plane.src
+                self.Data_Plane.src = (mac, ip, port_num)
+                self.Data_Plane.cleartext_listen()
+        elif choice == 2:
+            client.update_hosts()
+            client.Control_Plane.create_SA()
         else:
             pass
 
@@ -78,7 +92,7 @@ class Client():
 
 if __name__ == "__main__":
     client = Client('Alice')
-    client.run_test(1)
+    client.run_test(2)
     # sc_identifier = client.Control_Plane.KaY.create_SC()   # We def need better calling conventions
 
    
