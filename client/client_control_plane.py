@@ -38,6 +38,10 @@ class Key_Agreement_Entity():
         except Exception as e:
             print('Failed to load hosts.txt')
 
+    def update_hosts(self):
+        # The controllers (local or global) will have a record of the hosts, this will fetch that record  
+        pass
+
     # We def need some error checking for these functions
     def create_SC(self):
         sc_ID = randint(10000, 65535)

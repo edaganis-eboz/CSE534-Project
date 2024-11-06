@@ -160,7 +160,5 @@ class Client_Data_Plane():
         except Exception as e:
             print(f"Sniffing failed: {e}")
 
-    def fun(self):
-        print("fun")
 
         
