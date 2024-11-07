@@ -90,11 +90,6 @@ class MAC_Security_Entity():
 
                 print("Received data: ", data, "End of data")
 
-        try:
-            sniff(prn=packet_handler, store=0)
-        except Exception as e:
-            print(f"Sniffing failed: {e}")
-
     def deserialized_sectag(self, sectag):
         sc_ID = int.from_bytes(sectag[:2], 'big')
         sa_ID = int.from_bytes(sectag[2:4], 'big')
@@ -132,31 +127,28 @@ class MAC_Security_Entity():
         new_SA = Secure_Association(sa_ID, dest)
         self.secure_association.append(new_SA)
 
-class Cleartext_Handler():
+class Listener():
     def __init__(self):
         self.queue = queue.Queue()
-        self.home_address = None
     
-    @staticmethod
-    def send_cleartext(src, data, dst):  
-        frame = Ether(src=src[0], dst=dst[0]) / IP(src=src[1], dst=dst[1]) / UDP(dport=dst[2], sport=src[2]) / data
-        try:
-            sendp(frame, iface="lo") # TODO: change iface when in production
-            return 0
-        except Exception as e:
-            return -1
+    def get_response(self):
+        if not self.queue.empty():
+            return self.queue.get()
+        return None
 
-    def cleartext_listen(self):
+    def start(self):
+        listener_thread = threading.Thread(target=self.listen, daemon=True)
+        listener_thread.daemon = True
+        listener_thread.start()
+        return listener_thread.ident
+
+    def listen(self):
         def handle(frame):
-            if UDP in frame and frame[UDP].dport == self.src[2]:
-                print("Received UDP packet:")
-                print(f"Source IP: {frame[IP].src}")
-                print(f"Source Port: {frame[UDP].sport}")
-                print(f"Destination Port: {frame[UDP].dport}")
-                print(f"Payload: {frame[Raw] if Raw in frame else 'No payload'}")
+            if Ether in frame and Raw in frame and UDP in frame:
+                self.queue.put(frame)
 
         try:
-            print(f"Listening for UDP packets on port {self.src[2]}...")
+            print(f"Listening...")
             sniff(iface="lo", prn=handle, store=0)
         except Exception as e:
             print(f"Sniffing failed: {e}")
@@ -166,16 +158,26 @@ class Client_Data_Plane():
     # SecY is on the data plane
     def __init__(self):
         self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
-        self.cleartext_handler = Cleartext_Handler()
+        self.listener = Listener()
         self.SecY = MAC_Security_Entity()
+        
+    def start_listener(self):
         try:
-            self.cleartext_handler.start_listen()
+            self.listener.start()
         except Exception as e:
             print("Cleartext listener failed to start....")
+            print(f"{e}")
 
-    def send_cleartext(self, data, dst):
-        self.cleartext_handler.send_cleartext(self.src, data, dst)
+    def get_response(self):
+        return self.listener.get_response()
 
+    def send_cleartext(self, data, dst):  
+        frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
+        try:
+            sendp(frame, iface="lo") # TODO: change iface when in production
+            return 0
+        except Exception as e:
+            return -1
     
 
 

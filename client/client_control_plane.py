@@ -1,23 +1,9 @@
 from random import randint
-from enum import Enum
 from os import urandom
-
-class Secure_Association():
-    def __init__(self, sc_ID, sa_ID, dest, key, type):
-        self.sc_identifier = sc_ID # This might be useful
-        self.sa_identifier = sa_ID #placeholder
-        self.destination = dest #("MAC_ADDR", "IP_ADDR", "PORT")
-        self.key = key
-        self.type = self.SA_Type(0)
-        self.cipher = None
-    class SA_Type(Enum):
-        OUTGOING = 0
-        INCOMMING = 1
-
-class Secure_Channel():
-    def __init__(self, sc_ID):
-        self.sc_identifier = sc_ID #placeholder
-        self.associations = {}
+from util import *
+from queue import Queue
+import threading
+import time
 
 class Key_Agreement_Entity():
     def __init__(self, identifier):
@@ -53,8 +39,8 @@ class Key_Agreement_Entity():
         return self.secure_channels.get(sc_ID)
     
     def create_SA(self, sc_ID, dest, key, type):
-        sa_ID = randint(10000, 65535)
-        sa = Secure_Association(sc_ID, sa_ID, dest, key)
+        sa_ID = randint(10000, 65535) # TODO This rand int stuff needs to check if there is no SA/SC with the same identifier
+        sa = Secure_Association(sc_ID, sa_ID, dest, key, type)
         sc = self.secure_channels[sc_ID]
         sc.associations[sa_ID] = sa
         return sa_ID
@@ -91,43 +77,56 @@ class Key_Agreement_Entity():
             for index, sa in enumerate(sc.associations.values()):
                 print(f"[{index}] Secure Association ID: {sa.sa_identifier} -> {self.resolve_address(sa.destination)}")
 
+class Connection_Handler(): 
+    # Each incomming SA + cleartext channel is going to have its own connection handler
+    def __init__(self, in_queue: Queue):
+        self.in_queue = in_queue
+
+    
+
+
 
 class Client_Control_Plane():
     # KaY is on the control plane
-    def __init__(self, Data_Plane, identifier, RSA_Key):
+    
+    def __init__(self, Data_Plane, identifier):
         self.KaY = Key_Agreement_Entity(identifier)
         self.Data_Plane = Data_Plane
-    class KE_Protocol_Messages(Enum):
-        SA_KE_REQUEST = b'SA_KE_REQUEST'
-        SA_KE_ACCEPT = b'SA_KE_ACCEPT'
+        self.RSA_Key = None
+        get_from_data_plane = threading.Thread(target=self.get_from_data_plane, args=(self.Data_Plane.listener.queue,), daemon=True).start()
+
+
+    def get_from_data_plane(self, in_queue: Queue):
+        while True:
+            time.sleep(0.5) # So the computer doesnt blow up?????
+            if not in_queue.empty():
+                print(in_queue.get())
 
     # Key exchange is hella broken
     # This needs to be in try except blocks as well
-    def key_exchange_start(self, dest): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY
-        self.Data_Plane.send_cleartext(self.KE_Protocol_Messages.SA_KE_REQUEST, dest)
+    def key_exchange_start(self, dst): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY
+        self.Data_Plane.send_cleartext(KE_Protocol_Messages.SA_KE_REQUEST, dst)
         response = self.Data_Plane.get_response()
-        if response == self.KE_Protocol_Messages.SA_KE_ACCEPT:
-            self.Data_Plane.send_cleartext(RSA_Key)
+        if response == KE_Protocol_Messages.SA_KE_ACCEPT:
+            self.Data_Plane.send_cleartext(self.RSA_Key)
             encrypted_shared_secret = self.Data_Plane.get_response()
-            shared_secret = None
+            shared_secret = None #decrypt(encrypted_shared_secret)
             return shared_secret
         else:
             return None
         
-    def key_exchange_respond(self, request_frame):
+    def key_exchange_respond(self):
         self.Data_Plane.send_cleartext(self.KE_Protocol_Messages.SA_KE_ACCEPT)
         pubkey = self.Data_Plane.get_response()
         secret = urandom(256)
-        encrypted_secret = encrypt(pubkey, secret)
+        encrypted_secret = None #encrypt(pubkey, secret)
         self.Data_Plane.send_cleartext(encrypted_secret)
         # create a incomming SA
 
 
-    def create_SA(self, sc_ID, dest, type):
-        shared_secret = self.key_exchange(dest)
+    def create_outgoing_SA(self, sc_ID, dest):
+        shared_secret = self.key_exchange_start(dest)
         if shared_secret != None:
-            self.KaY.create_SA(sc_ID, dest, shared_secret, type)
+            self.KaY.create_SA(sc_ID, dest, shared_secret, 0)
         else:
             print("Key Exchange Failed")
-
-        
