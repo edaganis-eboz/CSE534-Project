@@ -70,7 +70,7 @@ Select an Option:
                     sc_ID = self.Control_Plane.KaY.create_SC()
                     print(f"Secure Channel created with ID: {sc_ID}")
                 elif choice == 2:
-                    self.Data_Plane.send_cleartext(b"Hello", ("00:00:00:00:00:00", "127.0.0.1", 1337))
+                    self.Data_Plane.send_cleartext(b'SA_KE_REQUEST', ("00:00:00:00:00:00", "127.0.0.1", 1337))
                     # sc_ID = input("Input Secure Channel ID: ")
                     # target = input("Input target: ")
                     # self.Control_Plane.create_outgoing_SA(sc_ID, "Bob")

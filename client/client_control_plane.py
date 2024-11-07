@@ -1,9 +1,10 @@
+from scapy.all import Ether, IP, UDP, sendp, Raw
 from random import randint
 from os import urandom
 from util import *
-from queue import Queue
+import queue
 import threading
-import time
+
 
 class Key_Agreement_Entity():
     def __init__(self, identifier):
@@ -77,14 +78,6 @@ class Key_Agreement_Entity():
             for index, sa in enumerate(sc.associations.values()):
                 print(f"[{index}] Secure Association ID: {sa.sa_identifier} -> {self.resolve_address(sa.destination)}")
 
-class Connection_Handler(): 
-    # Each incomming SA + cleartext channel is going to have its own connection handler
-    def __init__(self, in_queue: Queue):
-        self.in_queue = in_queue
-
-    
-
-
 
 class Client_Control_Plane():
     # KaY is on the control plane
@@ -93,40 +86,82 @@ class Client_Control_Plane():
         self.KaY = Key_Agreement_Entity(identifier)
         self.Data_Plane = Data_Plane
         self.RSA_Key = None
-        get_from_data_plane = threading.Thread(target=self.get_from_data_plane, args=(self.Data_Plane.listener.queue,), daemon=True).start()
+
+        # Threading Stuff
+        self.lock = threading.Lock()
+        self.running = True
+        self.data_plane_listen = threading.Thread(target=self.get_traffic_from_data_plane, daemon=True)
+        self.data_plane_listen.start()
+    
+    @staticmethod
+    def get_src_info(frame):
+        eth = frame.getlayer(Ether)
+        ip = frame.getlayer(IP)
+        transport = frame.getlayer(UDP)
+    
+        
+        if eth and ip and transport:
+            src_eth = eth.src        
+            src_ip = ip.src          
+            src_port = transport.sport  
+
+            return (src_eth, src_ip, src_port)
+        else:
+            return None 
+    
+    
+    def process_frame(self, frame):
+        with self.lock:
+            if Raw in frame:
+                try:
+                    message = KE_Protocol_Messages(frame[Raw].load)
+                    if message == KE_Protocol_Messages.SA_KE_REQUEST:
+                        self.key_exchange_accept(frame)
+                    elif message == KE_Protocol_Messages.SA_KE_ACCEPT:
+                        self.key_exchange_send_pubkey()
+                    else:
+                        print(f"Message: {message}")
+                except ValueError:
+                    pass
 
 
-    def get_from_data_plane(self, in_queue: Queue):
-        while True:
-            time.sleep(0.5) # So the computer doesnt blow up?????
-            if not in_queue.empty():
-                print(in_queue.get())
+    def get_traffic_from_data_plane(self):
+        while self.running:
+            try:
+                frame = self.Data_Plane.listener.queue.get(timeout=1)
+                self.process_frame(frame)
+            except queue.Empty:
+                pass
 
     # Key exchange is hella broken
     # This needs to be in try except blocks as well
     def key_exchange_start(self, dst): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY
-        self.Data_Plane.send_cleartext(KE_Protocol_Messages.SA_KE_REQUEST, dst)
-        response = self.Data_Plane.get_response()
-        if response == KE_Protocol_Messages.SA_KE_ACCEPT:
-            self.Data_Plane.send_cleartext(self.RSA_Key)
-            encrypted_shared_secret = self.Data_Plane.get_response()
-            shared_secret = None #decrypt(encrypted_shared_secret)
-            return shared_secret
-        else:
-            return None
+        self.Data_Plane.send_cleartext(KE_Protocol_Messages.SA_KE_REQUEST.value, dst)
+
+    def key_exchange_accept(self, frame):
+        return_addr = self.get_src_info(frame)
+        self.Data_Plane.send_cleartext(KE_Protocol_Messages.SA_KE_ACCEPT.value, return_addr)
         
-    def key_exchange_respond(self):
-        self.Data_Plane.send_cleartext(self.KE_Protocol_Messages.SA_KE_ACCEPT)
-        pubkey = self.Data_Plane.get_response()
+    def key_exchange_send_pubkey(self):
+        print("Enter Pubkey func")
+        #self.Data_Plane.send_cleartext(self.RSA_Key)
+
+    def key_exchange_send_encrypted_secret(self):
         secret = urandom(256)
         encrypted_secret = None #encrypt(pubkey, secret)
         self.Data_Plane.send_cleartext(encrypted_secret)
         # create a incomming SA
 
-
-    def create_outgoing_SA(self, sc_ID, dest):
+    def start_create_outgoing_SA(self, sc_ID, dest):
         shared_secret = self.key_exchange_start(dest)
         if shared_secret != None:
             self.KaY.create_SA(sc_ID, dest, shared_secret, 0)
         else:
             print("Key Exchange Failed")
+    
+    def end_create_outgoing_SA(self):
+        pass
+
+    def create_incoming_SA(self, sc_ID, dest):
+        pass
+

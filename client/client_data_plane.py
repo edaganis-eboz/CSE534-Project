@@ -1,6 +1,5 @@
-from scapy.all import Ether, IP, UDP, sendp, send, Raw
+from scapy.all import Ether, IP, UDP, sendp, Raw
 from scapy.sendrecv import sniff
-from scapy.utils import hexdump
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Signature import pkcs1_15
@@ -131,11 +130,6 @@ class Listener():
     def __init__(self):
         self.queue = queue.Queue()
     
-    def get_response(self):
-        if not self.queue.empty():
-            return self.queue.get()
-        return None
-
     def start(self):
         listener_thread = threading.Thread(target=self.listen, daemon=True)
         listener_thread.daemon = True
