@@ -1,3 +1,5 @@
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 from scapy.all import Ether, IP, UDP, sendp, Raw
 from random import randint
 from os import urandom
@@ -12,6 +14,7 @@ class Key_Agreement_Entity():
         self.KaY_indentifier = identifier
         self.CA_hosts = {}
         self.secure_channels = {}
+        self.secure_channels[-1] = Secure_Channel(-1) # Special Channel for incomming SA's
 
     def load_known_hosts(self):
         # This will be the hosts in the Connectivity Association (CA), this is filled with "discovery" that KaY does
@@ -36,21 +39,22 @@ class Key_Agreement_Entity():
         self.secure_channels[sc_ID] = sc
         return sc_ID
 
+    # TODO these get functions keep returning NoneType
     def get_SC(self, sc_ID):
         return self.secure_channels.get(sc_ID)
     
-    def create_SA(self, sc_ID, dest, key, type):
-        sa_ID = randint(10000, 65535) # TODO This rand int stuff needs to check if there is no SA/SC with the same identifier
-        sa = Secure_Association(sc_ID, sa_ID, dest, key, type)
-        sc = self.secure_channels[sc_ID]
-        sc.associations[sa_ID] = sa
-        return sa_ID
-
     def get_SA(self, sc_ID, sa_ID):
         secure_channel = self.get_SC(sc_ID)
         secure_association = secure_channel.associations.get(sa_ID)
         return secure_association
     
+    def create_SA(self, sc_ID, dest, key):
+        sa_ID = randint(10000, 65535) # TODO This rand int stuff needs to check if there is no SA/SC with the same identifier
+        sa = Secure_Association(sc_ID, sa_ID, dest, key)
+        sc = self.secure_channels[sc_ID]
+        sc.associations[sa_ID] = sa
+        return sa_ID
+
     def resolve_address(self, destination):
         for KaY_indentifier in self.CA_hosts:
             if destination == self.CA_hosts[KaY_indentifier]:
@@ -70,7 +74,9 @@ class Key_Agreement_Entity():
                 print(f"[{index}] Secure Channel ID: {sc}")
 
     def print_SAs(self, sc_ID):
-        sc = self.get_SC(sc_ID)
+        sc = self.secure_channels[sc_ID]
+        if sc == None:
+            print("f")
         if len(sc.associations) == 0:
             print(f"Secure Channel {sc_ID} has no Secure Associations")
         else:
@@ -114,13 +120,17 @@ class Client_Control_Plane():
         with self.lock:
             if Raw in frame:
                 try:
-                    message = KE_Protocol_Messages(frame[Raw].load)
-                    if message == KE_Protocol_Messages.SA_KE_REQUEST:
+                    protocol = KE_Protocol_Messages((frame[Raw].load)[:12])
+                    if protocol == KE_Protocol_Messages.SA_KE_REQUEST:
                         self.key_exchange_accept(frame)
-                    elif message == KE_Protocol_Messages.SA_KE_ACCEPT:
-                        self.key_exchange_send_pubkey()
+                    elif protocol == KE_Protocol_Messages.SA_KE_ACCEPT:
+                        self.key_exchange_send_pubkey(frame)
+                    elif protocol == KE_Protocol_Messages.SA_KE_PUBKEY:
+                        self.key_exchange_send_encrypted_secret(frame)
+                    elif protocol == KE_Protocol_Messages.SA_KE_SECRET:
+                        self.key_exchange_create_outgoing(frame)
                     else:
-                        print(f"Message: {message}")
+                        print(f"Message: {protocol}")
                 except ValueError:
                     pass
 
@@ -133,35 +143,63 @@ class Client_Control_Plane():
             except queue.Empty:
                 pass
 
+    
+    def create_outgoing_SA(self, sc_id, dst):
+        try:
+            sc = self.KaY.secure_channels[sc_id]
+        except KeyError:
+            print(f"Secure Channel with ID:{sc_id} does not exist")
+        else:
+            self.key_exchange_start(sc_id, dst)
+    
+    def send_via_SA(self, message, sc_id, sa_id):
+        secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
+        self.Data_Plane.send(message, None, secure_association=secure_association)
+    
     # Key exchange is hella broken
     # This needs to be in try except blocks as well
-    def key_exchange_start(self, dst): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY
-        self.Data_Plane.send_cleartext(KE_Protocol_Messages.SA_KE_REQUEST.value, dst)
+    def key_exchange_start(self, sc_id, dst): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY
+        message = KE_Protocol_Messages.SA_KE_REQUEST.value+str(sc_id).encode()
+        self.Data_Plane.send(message, dst)
 
     def key_exchange_accept(self, frame):
         return_addr = self.get_src_info(frame)
-        self.Data_Plane.send_cleartext(KE_Protocol_Messages.SA_KE_ACCEPT.value, return_addr)
+        sc_id = (frame[Raw].load)[12:17]
+        message = KE_Protocol_Messages.SA_KE_ACCEPT.value+ sc_id
+        self.Data_Plane.send(message, return_addr)
         
-    def key_exchange_send_pubkey(self):
-        print("Enter Pubkey func")
-        #self.Data_Plane.send_cleartext(self.RSA_Key)
+    def key_exchange_send_pubkey(self, frame):
+        return_addr = self.get_src_info(frame)
+        sc_id = (frame[Raw].load)[12:17]
+        try:
+            # assert self.RSA_Key != None
+            key_message = KE_Protocol_Messages.SA_KE_PUBKEY.value + sc_id + self.RSA_Key.publickey().export_key(format='PEM')
+            self.Data_Plane.send(key_message, return_addr)
+        except AssertionError:
+            print("No key")
 
-    def key_exchange_send_encrypted_secret(self):
-        secret = urandom(256)
-        encrypted_secret = None #encrypt(pubkey, secret)
-        self.Data_Plane.send_cleartext(encrypted_secret)
+    def key_exchange_send_encrypted_secret(self, frame):
+        return_addr = self.get_src_info(frame)
+        sc_id = (frame[Raw].load)[12:17]
+        pubkey = RSA.import_key((frame[Raw].load)[17:])
+        secret = urandom(32)
+        cipher = PKCS1_OAEP.new(pubkey)
+        encrypted_secret = cipher.encrypt(secret)
+        message = KE_Protocol_Messages.SA_KE_SECRET.value+ sc_id + encrypted_secret
+        self.Data_Plane.send(message, return_addr)
+        
         # create a incomming SA
+        self.KaY.create_SA(-1, return_addr, secret)
 
-    def start_create_outgoing_SA(self, sc_ID, dest):
-        shared_secret = self.key_exchange_start(dest)
+    def key_exchange_create_outgoing(self, frame):
+        return_addr = self.get_src_info(frame)
+        sc_id = int((frame[Raw].load)[12:17])
+        encrypted_secret = (frame[Raw].load)[17:]
+        cipher = PKCS1_OAEP.new(self.RSA_Key)
+        shared_secret = cipher.decrypt(encrypted_secret)
         if shared_secret != None:
-            self.KaY.create_SA(sc_ID, dest, shared_secret, 0)
+            self.KaY.create_SA(sc_id, return_addr, shared_secret)
         else:
             print("Key Exchange Failed")
-    
-    def end_create_outgoing_SA(self):
-        pass
 
-    def create_incoming_SA(self, sc_ID, dest):
-        pass
 

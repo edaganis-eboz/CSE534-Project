@@ -5,6 +5,8 @@ from Crypto.Hash import SHA256
 from Crypto.Signature import pkcs1_15
 import threading
 import queue
+from collections import deque
+import hashlib
 
 from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
 
@@ -12,15 +14,11 @@ class MAC_Security_Entity():
     def __init__(self):
         pass
 
-    def send_via_SA(self, data, SA):
+    def send_via_SA(self, src, data, SA):
 
-        # This is where we would have Scapy, either a class or a function, that would send our frame with the proper formatting
-        # Format would be, (from the paper) MAC_SRC MAC_DST SECTAG |ENCRYPTED DATA| ICV
-        # Use SA.cipher, to encrypt and do the ICV calculation and what not, SA.cipher is our Secure Assocation Key (SAK) for all intents and purposes
-        
-        SA.cipher = AES.new(SA.key, AES.MODE_GCM)
+        SA.cipher = AES.new(SA.key, AES.MODE_GCM) # TODO Not sure how I feel about this, do once only?
 
-        frame = Ether(src=self.src[0], dst=SA.destination[0])
+        frame = Ether(src=src[0], dst=SA.destination[0])
         sectag = self.create_sectag(SA)
         serialized_sectag = self.serialize_sectag(sectag)
 
@@ -29,20 +27,10 @@ class MAC_Security_Entity():
         iv = SA.cipher.nonce
 
         macSecFrame = frame / Raw(load=serialized_sectag) / Raw(load=iv) / Raw(load=ciphertext) / Raw(load=icv)
-
         print("\nciphertext sent: ", ciphertext, "\n")
 
-        try:
-            sendp(macSecFrame)
-            print(f"MACsec frame Sent: {macSecFrame}")
-            if Raw in macSecFrame:
-                # print("Raw Payload:")
-                # hexdump(macSecFrame)  # Print the raw data in hex format
-                return 0
-        except Exception as e:
-            print(f"Error: {e}")
-            return -1
-    
+        return macSecFrame
+        
     def create_sectag(self, SA):
         sectag = {'sc_ID': SA.sc_identifier, 'sa_ID': SA.sa_identifier, 're-keying': False}
         return sectag
@@ -60,34 +48,17 @@ class MAC_Security_Entity():
 
         return(serialized_sectag)
 
-    def receive_via_SA(self):
-        def packet_handler(packet):
-            if Ether in packet and Raw in packet:
-                try:
-                    #print(f"MACsec frame Received: {packet}")
-                    if Raw in packet:
-                        # print("Raw Payload:")
-                        # hexdump(packet)  # Print the raw data in hex format
-                        pass
-                except Exception as e:
-                    print(f"Error: {e}")
-                    return -1
-
-                eth_frame = packet[Ether]
-                raw_payload = packet[Raw].load
-
-                sectag_size = 5
-                sectag = raw_payload[:sectag_size]
-                iv = raw_payload[sectag_size:sectag_size+16]
-                ciphertext = raw_payload[sectag_size+16:-16]
-                icv = raw_payload[-16:]
-                print("\nciphertext received: ", ciphertext, "\n")
-
-                sectag_deserialized = self.deserialized_sectag(sectag)
-
-                data = self.decrypt_data(ciphertext, icv, sectag_deserialized['sa_ID'], iv)
-
-                print("Received data: ", data, "End of data")
+    def receive_via_SA(self, packet):
+        eth_frame = packet[Ether]
+        raw_payload = packet[Raw].load
+        sectag_size = 5
+        sectag = raw_payload[:sectag_size]
+        iv = raw_payload[sectag_size:sectag_size+16]
+        ciphertext = raw_payload[sectag_size+16:-16]
+        icv = raw_payload[-16:]
+        sectag_deserialized = self.deserialized_sectag(sectag)
+        
+        return (ciphertext, icv, sectag_deserialized, iv)
 
     def deserialized_sectag(self, sectag):
         sc_ID = int.from_bytes(sectag[:2], 'big')
@@ -98,11 +69,11 @@ class MAC_Security_Entity():
         plain_sectag = {'sc_ID': sc_ID, 'sa_ID': sa_ID,'re-keying': rekeying}
 
         return plain_sectag
-    def decrypt_data(self, ciphertext, icv, sa_ID, iv):
-        SA = self.get_secure_association(sa_ID)
-
+    def decrypt_data(self, ciphertext, icv, sectag, iv):
+        sa_id = sectag['sa_ID']
+        SA = None # GET RID OF THIS WHEN FINISHED
         if SA is None:
-            print(f"No Secure Association found for SA ID: {sa_ID}")
+            print(f"No Secure Association found for SA ID: {sa_id}")
             return None
 
         cipher = AES.new(SA.key, AES.MODE_GCM, nonce=iv)
@@ -114,21 +85,18 @@ class MAC_Security_Entity():
             print("Decryption failed: incorrect tag (ICV)")
             return None
 
-    def get_secure_association(self, sa_ID):
-        for sa in self.secure_association:
-            if sa.sa_identifier == sa_ID:
-                return sa
-
-        print(f"No Secure Association found for SA ID: {sa_ID}")  # Debug message
-        return None  # Explicitly return None if not found
-
-    def add_secure_association(self, sc_ID, sa_ID, dest):
-        new_SA = Secure_Association(sa_ID, dest)
-        self.secure_association.append(new_SA)
-
 class Listener():
     def __init__(self):
         self.queue = queue.Queue()
+        self.recent_packets = deque(maxlen=10)
+
+    def is_duplicate(self, packet):
+        packet_hash = hashlib.md5(bytes(packet)).hexdigest()
+
+        if packet_hash in self.recent_packets:
+            return True
+        self.recent_packets.append(packet_hash)
+        return False
     
     def start(self):
         listener_thread = threading.Thread(target=self.listen, daemon=True)
@@ -138,8 +106,9 @@ class Listener():
 
     def listen(self):
         def handle(frame):
-            if Ether in frame and Raw in frame and UDP in frame:
-                self.queue.put(frame)
+            if not self.is_duplicate(frame):
+                if Ether in frame and Raw in frame and UDP in frame:
+                    self.queue.put(frame)
 
         try:
             print(f"Listening...")
@@ -159,19 +128,24 @@ class Client_Data_Plane():
         try:
             self.listener.start()
         except Exception as e:
-            print("Cleartext listener failed to start....")
+            print("Listener failed to start....")
             print(f"{e}")
 
-    def get_response(self):
-        return self.listener.get_response()
-
-    def send_cleartext(self, data, dst):  
-        frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
-        try:
-            sendp(frame, iface="lo") # TODO: change iface when in production
-            return 0
-        except Exception as e:
-            return -1
+    def send(self, data, dst, secure_association = None):
+        if secure_association == None:  
+            frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
+            try:
+                # print(f"Data: {data}")
+                sendp(frame, iface="lo", verbose=False) # TODO: change iface when in production
+                return 0
+            except Exception as e:
+                print(f"Sendp failed: {e}")
+                return -1
+        else:
+            frame = self.SecY.send_via_SA(self.src, data, secure_association)
+            # frame.show()
+            sendp(frame, iface="lo", verbose=False) # TODO: change iface when in production
+            
     
 
 

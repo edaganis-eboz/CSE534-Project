@@ -22,7 +22,7 @@ class Client():
 
     def generate_key(self):
         # It would seem that each client has a RSA(2048) Keypair, using that key pair, we can create a CSR, and then a Cert.
-        self.RSA_key = RSA.generate(4096)
+        self.RSA_key = RSA.generate(2048)
         self.Control_Plane.RSA_Key = self.RSA_key
         # Save the keypairs
         try:
@@ -42,7 +42,7 @@ class Client():
 
     def send_cleartext(self, data, dst_mac, dst_ip, dst_port):
         dst = (dst_mac, dst_ip, dst_port)
-        self.Data_Plane.send_cleartext(data, dst)
+        self.Data_Plane.send(data, dst)
 
     def send_via_SA(self, message, identifiers):
         sc_id, sa_id = identifiers
@@ -58,7 +58,8 @@ Select an Option:
 [2] Create Secure Association
 [3] List Secure Channels
 [4] List Secure Associations
-[5] Exit
+[5] Send Test Message
+[6] Exit
         """
         while (not off):
             print(options)
@@ -70,16 +71,19 @@ Select an Option:
                     sc_ID = self.Control_Plane.KaY.create_SC()
                     print(f"Secure Channel created with ID: {sc_ID}")
                 elif choice == 2:
-                    self.Data_Plane.send_cleartext(b'SA_KE_REQUEST', ("00:00:00:00:00:00", "127.0.0.1", 1337))
-                    # sc_ID = input("Input Secure Channel ID: ")
+                    sc_ID = int(input("Input Secure Channel ID: "))
+                    self.Control_Plane.create_outgoing_SA(sc_ID, ("00:00:00:00:00:00", "127.0.0.1", 1337))
                     # target = input("Input target: ")
-                    # self.Control_Plane.create_outgoing_SA(sc_ID, "Bob")
                 elif choice == 3:
                     self.Control_Plane.KaY.print_SCs()
                 elif choice == 4:
-                    sc_ID = input("Input Secure Channel ID: ")
+                    sc_ID = int(input("Input Secure Channel ID: "))
                     self.Control_Plane.KaY.print_SAs(sc_ID)
                 elif choice == 5:
+                    sc_ID = int(input("In which SC? "))
+                    sa_ID = int(input("Via which SA? "))
+                    self.Control_Plane.send_via_SA(b"Hello", sc_ID, sa_ID)
+                elif choice == 6:
                     off = True
                 else:
                     pass
@@ -87,7 +91,7 @@ Select an Option:
                 if e == KeyboardInterrupt:
                     exit(0)
                 else:
-                    print("Unknown option")
+                    print(f"Unknown option {e}")
 
 
 def run_test(client: Client, choice):
@@ -104,7 +108,7 @@ def run_test(client: Client, choice):
         if listen_or_send: # 1
             destination_port = int(input("Destination Port? "))
             destination = ("ff:ff:ff:ff:ff:ff", "127.0.0.1", destination_port)
-            client.Data_Plane.send_cleartext(b'TEST', destination)
+            client.Data_Plane.send(b'TEST', destination)
         else:
             port_num = random.randint(10000, 65535)
             mac, ip, _ = client.Data_Plane.src
