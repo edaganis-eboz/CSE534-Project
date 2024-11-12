@@ -1,44 +1,13 @@
-from Crypto.PublicKey import RSA
-import threading
-import time
 import random
-from client_control_plane import Client_Control_Plane, Secure_Association, Secure_Channel
+from client_control_plane import Client_Control_Plane
 from client_data_plane import Client_Data_Plane
 
 class Client():
     def __init__(self, KaY_identifier):
-        self.RSA_key_path = "./client_tools/key.pem"
-        self.RSA_key = None
         self.Data_Plane = Client_Data_Plane()
         self.Control_Plane = Client_Control_Plane(self.Data_Plane, KaY_identifier)
-        try:
-            self.load_key()
-            print(f"Sucessfully loaded key: {self.RSA_key_path}")
-        except:
-            print("No RSA keypair found, generating new key")
-            self.generate_key()
         self.Control_Plane.KaY.load_known_hosts()
         self.Data_Plane.start_listener()
-
-    def generate_key(self):
-        # It would seem that each client has a RSA(2048) Keypair, using that key pair, we can create a CSR, and then a Cert.
-        self.RSA_key = RSA.generate(2048)
-        self.Control_Plane.RSA_Key = self.RSA_key
-        # Save the keypairs
-        try:
-            with open(self.RSA_key_path, "wb") as f:
-                data = self.RSA_key.export_key()
-                f.write(data)
-            print(f"Successfully generated key and saved to {self.RSA_key_path}")
-        except:
-            print("Key generation failed! Exiting...")
-            exit(1)
-
-    def load_key(self):
-        with open(self.RSA_key_path, "rb") as f:
-            data = f.read()
-            self.RSA_key = RSA.import_key(data)
-            self.Control_Plane.RSA_Key = self.RSA_key
 
     def send_cleartext(self, data, dst_mac, dst_ip, dst_port):
         dst = (dst_mac, dst_ip, dst_port)
@@ -125,22 +94,6 @@ if __name__ == "__main__":
     
     client.interactive()
     #run_test(client, 2)
-    # sc_identifier = client.Control_Plane.KaY.create_SC()   # We def need better calling conventions
-
-   
-    # destination = ("ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
-    # sa_indentifier = client.Control_Plane.KaY.create_SA(sc_identifier, destination)
-
-    # #test
-    # receivingThread = threading.Thread(target=client.Data_Plane.receive_via_SA, daemon=True)
-    # receivingThread.start()
-
-    # time.sleep(.5)
-
-    # #client.send_cleartext(b"Hello!\n","ff:ff:ff:ff:ff:ff", "127.0.0.1", 1234)
-    # client.send_via_SA(b"Testing\n", (sc_identifier, sa_indentifier))
-
-    # time.sleep(.25)
 
     #####
     # Probably the way this will work is smth like, suppose we want to send a MACsec message to someone. We first go through the control plane to resolve the address to our SA,

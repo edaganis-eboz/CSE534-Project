@@ -16,18 +16,18 @@ class MAC_Security_Entity():
 
     def send_via_SA(self, src, data, SA):
 
-        SA.cipher = AES.new(SA.key, AES.MODE_GCM) # TODO Not sure how I feel about this, do once only?
+        cipher = AES.new(SA.key, AES.MODE_GCM) # TODO Not sure how I feel about this, do once only?
 
         frame = Ether(src=src[0], dst=SA.destination[0])
         sectag = self.create_sectag(SA)
         serialized_sectag = self.serialize_sectag(sectag)
 
-        ciphertext, icv = SA.cipher.encrypt_and_digest(data)
+        ciphertext, icv = cipher.encrypt_and_digest(data)
 
-        iv = SA.cipher.nonce
+        iv = cipher.nonce
 
         macSecFrame = frame / Raw(load=serialized_sectag) / Raw(load=iv) / Raw(load=ciphertext) / Raw(load=icv)
-        print("\nciphertext sent: ", ciphertext, "\n")
+        # print("\nciphertext sent: ", ciphertext, "\n")
 
         return macSecFrame
         
@@ -48,9 +48,9 @@ class MAC_Security_Entity():
 
         return(serialized_sectag)
 
-    def receive_via_SA(self, packet):
-        eth_frame = packet[Ether]
-        raw_payload = packet[Raw].load
+    def receive_via_SA(self, frame):
+        eth_frame = frame[Ether]
+        raw_payload = frame[Raw].load
         sectag_size = 5
         sectag = raw_payload[:sectag_size]
         iv = raw_payload[sectag_size:sectag_size+16]
@@ -69,14 +69,8 @@ class MAC_Security_Entity():
         plain_sectag = {'sc_ID': sc_ID, 'sa_ID': sa_ID,'re-keying': rekeying}
 
         return plain_sectag
-    def decrypt_data(self, ciphertext, icv, sectag, iv):
-        sa_id = sectag['sa_ID']
-        SA = None # GET RID OF THIS WHEN FINISHED
-        if SA is None:
-            print(f"No Secure Association found for SA ID: {sa_id}")
-            return None
-
-        cipher = AES.new(SA.key, AES.MODE_GCM, nonce=iv)
+    def decrypt_data(self, ciphertext, icv, key, iv):
+        cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
 
         try:
             plaintext = cipher.decrypt_and_verify(ciphertext, icv)
@@ -107,7 +101,7 @@ class Listener():
     def listen(self):
         def handle(frame):
             if not self.is_duplicate(frame):
-                if Ether in frame and Raw in frame and UDP in frame:
+                if Ether in frame and Raw in frame: # TODO somehow make this only sniff our packets, original headers?
                     self.queue.put(frame)
 
         try:
