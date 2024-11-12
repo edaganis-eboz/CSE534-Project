@@ -13,6 +13,11 @@ class Client():
         dst = (dst_mac, dst_ip, dst_port)
         self.Data_Plane.send(data, dst)
 
+    def nping_via_SA(self, n, identifiers):
+        sc_id, sa_id = identifiers
+        self.Control_Plane.nping_via_SA(n, sc_id, sa_id)
+
+
     def send_via_SA(self, message, identifiers):
         sc_id, sa_id = identifiers
         SA = self.Control_Plane.KaY.get_SA(sc_id, sa_id)
@@ -28,7 +33,8 @@ Select an Option:
 [3] List Secure Channels
 [4] List Secure Associations
 [5] Send Test Message
-[6] Exit
+[6] Send Ping
+[7] Exit
         """
         while (not off):
             print(options)
@@ -53,6 +59,10 @@ Select an Option:
                     sa_ID = int(input("Via which SA? "))
                     self.Control_Plane.send_via_SA(b"Hello", sc_ID, sa_ID)
                 elif choice == 6:
+                    sc_ID = int(input("In which SC? "))
+                    sa_ID = int(input("Via which SA? "))
+                    self.nping_via_SA(1, (sc_ID, sa_ID))
+                elif choice == 7:
                     off = True
                 else:
                     pass

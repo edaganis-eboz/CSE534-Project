@@ -6,6 +6,7 @@ from os import urandom
 from util import *
 import queue
 import threading
+import time
 
 
 class Key_Agreement_Entity():
@@ -165,7 +166,11 @@ class Client_Control_Plane():
                         sa_id = sectag_deserialized['sa_ID']
                         secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
                         plaintext = self.Data_Plane.SecY.decrypt_data(ciphertext, icv, secure_association.key, iv)
-                        print(f"Recieved Decrypted Plaintext: {plaintext}")
+                        try:
+                            ping = PING_Messages(plaintext[:12])
+                            self.receive_nping(plaintext)
+                        except ValueError:
+                            print(f"Recieved Decrypted Plaintext: {plaintext}")
                     except Exception as e:
                         print(f"Decryption Failed: {e}")
 
@@ -193,6 +198,26 @@ class Client_Control_Plane():
         secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
         self.Data_Plane.send(message, None, secure_association=secure_association)
     
+    def nping_via_SA(self, n, sc_id, sa_id):
+        secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
+        t = str(time.time()).encode()
+        message = PING_Messages.PING_REQUEST.value + t + str(n).encode()
+        self.Data_Plane.send(message, None, secure_association=secure_association)
+
+    def receive_nping(self, plaintext):
+        ping = PING_Messages(plaintext[:12])
+        if ping == PING_Messages.PING_REQUEST:
+            t1 = plaintext[12:30]
+            n = plaintext[30:]
+            t2 = time.time()
+            one_way_trip_time = t2 - float(t1)
+            print(f"Ping Received! Trip Time: {one_way_trip_time}")
+            # TODO send ping reply
+        elif ping == PING_Messages.PING_REPLY:
+            # TODO check if there is an outgoing SA for the host who send the ping
+            pass
+        else:
+            print("Something went wrong with ping")
 
     # TODO This needs to be in try except blocks as well
     def key_exchange_start(self, sc_id, sa_id, dst): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY

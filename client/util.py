@@ -18,7 +18,11 @@ class KE_Protocol_Messages(Enum):
     SA_KE_PUBKEY = b'SA_KE_PUBKEY'
     SA_KE_SECRET = b'SA_KE_SECRET'
 
+class PING_Messages(Enum):
+    PING_REQUEST = b'PING_REQUEST'
+    PING_REPLY = b'PING_REPLYYY'
 
+## MAY NOT BE USED ##
 class SA_INIT_STAGES(Enum):
     # Outgoing 
     STAGE_0 = 0 #Created Request Sent
