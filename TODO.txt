@@ -1,11 +1,7 @@
 implement threading:
-    cleartext_listen needs to run on its own thread,
-    implement get_response
-        each ongoing convo in cleartext needs to have a convo identifier (header)
-        get response needs to be a like a while queue is not empty, send the frame to the queue of the convo
-
-    each SA needs to run in its own thread
-    Some sort of link from an SA in KaY to a thread in SecY
+    
 
 
-    Move SA and SC's into their own file, maybe put the protocol messages + protocol headers in there as well. util.py?
+
+    Small TODOs
+    Unify send_cleartext and send_via_SA to one function send(data, dst, SA=None)
