@@ -29,3 +29,7 @@ Code hosts that properly generate keys, and be able to save them to file. Hosts 
 - Write first draft of paper
 
 
+
+#### Goals for next draft
+- Key agreement, key agreement via LC (in clear)
+- Look at how address resolutions works with the SA, SC, AKA how would a switch in an SA forward a packet in an SC. 

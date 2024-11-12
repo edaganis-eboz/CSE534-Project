@@ -1,0 +1,7 @@
+implement threading:
+    
+
+
+
+    Small TODOs
+    Unify send_cleartext and send_via_SA to one function send(data, dst, SA=None)
