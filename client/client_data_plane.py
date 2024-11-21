@@ -1,4 +1,4 @@
-from scapy.all import Ether, IP, UDP, sendp, Raw
+from scapy.all import Ether, IP, UDP, sendp, Raw, ICMP
 from scapy.sendrecv import sniff
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
@@ -80,7 +80,8 @@ class MAC_Security_Entity():
             return None
 
 class Listener():
-    def __init__(self):
+    def __init__(self, src):
+        self.src = src
         self.queue = queue.Queue()
         self.recent_packets = deque(maxlen=10)
 
@@ -101,12 +102,13 @@ class Listener():
     def listen(self):
         def handle(frame):
             if not self.is_duplicate(frame):
-                if Ether in frame and Raw in frame: # TODO somehow make this only sniff our packets, original headers?
-                    self.queue.put(frame)
+                if Ether in frame and Raw in frame and ICMP not in frame: # TODO somehow make this only sniff our packets, original headers?
+                    if frame[Ether].src != self.src[0]:
+                        self.queue.put(frame)
 
         try:
             print(f"Listening...")
-            sniff(iface="lo", prn=handle, store=0)
+            sniff(iface="lo", prn=handle, store=0) # TODO change iface when in production
         except Exception as e:
             print(f"Sniffing failed: {e}")
 
@@ -115,7 +117,7 @@ class Client_Data_Plane():
     # SecY is on the data plane
     def __init__(self):
         self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
-        self.listener = Listener()
+        self.listener = Listener(self.src)
         self.SecY = MAC_Security_Entity()
         
     def start_listener(self):
