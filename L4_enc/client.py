@@ -8,9 +8,14 @@ def main():
     server_addr = ('127.0.0.1', 1337)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect(server_addr)
-        message = str(time.time()).encode()
-        ciphertext = cipher.encrypt(pad(message, 16))
-        s.sendall(cipher.iv + ciphertext)
+        for _ in range(100):
+            try:
+                message = str(time.time()).encode()
+                ciphertext = cipher.encrypt(pad(message, 16))
+                s.sendall(cipher.iv + ciphertext)
+                time.sleep(0.1)
+            except Exception as e:
+                pass
         s.close()
 
 

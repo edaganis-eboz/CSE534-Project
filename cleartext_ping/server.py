@@ -10,7 +10,7 @@ def main():
 
         while True:
             client_socket, client_addr = s.accept()
-            count = 0
+            count: int = 0
             # print(f'Connected to {client_addr}')
             try:
                 data = client_socket.recv(1024)
