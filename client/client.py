@@ -61,7 +61,7 @@ Select an Option:
                 elif choice == 6:
                     sc_ID = int(input("In which SC? "))
                     sa_ID = int(input("Via which SA? "))
-                    self.nping_via_SA(1, (sc_ID, sa_ID))
+                    self.nping_via_SA(100, (sc_ID, sa_ID))
                 elif choice == 7:
                     off = True
                 else:

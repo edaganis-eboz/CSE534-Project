@@ -119,7 +119,9 @@ class Client_Control_Plane():
         self.KaY = Key_Agreement_Entity(identifier)
         self.Data_Plane = Data_Plane
         self.RSA_Key = self.KaY.RSA_key
-
+        
+        self.nping_total: float = 0.0
+        self.nping_count: int = 0
         # Threading Stuff
         self.lock = threading.Lock()
         self.running = True
@@ -200,18 +202,25 @@ class Client_Control_Plane():
     
     def nping_via_SA(self, n, sc_id, sa_id):
         secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
-        t = str(time.time()).encode()
-        message = PING_Messages.PING_REQUEST.value + t + str(n).encode()
-        self.Data_Plane.send(message, None, secure_association=secure_association)
+        count: int = 0
+        while count < n:
+            t = str(time.time()).encode()
+            message = PING_Messages.PING_REQUEST.value + t
+            self.Data_Plane.send(message, None, secure_association=secure_association)
+            count += 1
+            time.sleep(0.3)
 
     def receive_nping(self, plaintext):
         ping = PING_Messages(plaintext[:12])
         if ping == PING_Messages.PING_REQUEST:
             t1 = plaintext[12:30]
-            n = plaintext[30:]
             t2 = time.time()
             one_way_trip_time = t2 - float(t1)
             print(f"Ping Received! Trip Time: {one_way_trip_time}")
+            self.nping_total += one_way_trip_time
+            self.nping_count += 1
+            if self.nping_count % 100 == 0:
+                print(f"Average latency: {self.nping_total / self.nping_count}")
             # TODO send ping reply
         elif ping == PING_Messages.PING_REPLY:
             # TODO check if there is an outgoing SA for the host who send the ping

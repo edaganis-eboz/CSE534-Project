@@ -1,14 +1,12 @@
 from scapy.all import Ether, IP, UDP, sendp, Raw, ICMP
 from scapy.sendrecv import sniff
 from Crypto.Cipher import AES
-from Crypto.Hash import SHA256
-from Crypto.Signature import pkcs1_15
 import threading
 import queue
 from collections import deque
 import hashlib
 
-from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
+# from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
 
 class MAC_Security_Entity():
     def __init__(self):
