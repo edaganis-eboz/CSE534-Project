@@ -12,24 +12,25 @@ def main():
             client_socket, client_addr = s.accept()
             count: int = 0
             # print(f'Connected to {client_addr}')
-            try:
-                data = client_socket.recv(1024)
-                if data:
-                    plaintext = float(data)
-                    oopt = time.time() - plaintext
-                    print(f"One way ping: {oopt}")
-                    total += oopt
-                    count += 1
-            except KeyboardInterrupt:
-                s.close()
-                break
-            except Exception as e:
-                print(f"{e}")
-            
-            if count >= 100:
-                print(f"{count} pings reached avg is :{total / count}")
-                s.close()
-                break
+            while count < 100:
+                try:
+                    data = client_socket.recv(1024)
+                    if data:
+                        plaintext = float(data)
+                        oopt = time.time() - plaintext
+                        print(f"One way ping: {oopt}")
+                        total += oopt
+                        count += 1
+                except KeyboardInterrupt:
+                    s.close()
+                    break
+                except Exception as e:
+                    print(f"{e}")
+                
+                if count >= 100:
+                    print(f"{count} pings reached avg is :{total / count}")
+                    s.close()
+                    break
             
     
     

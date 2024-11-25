@@ -80,8 +80,9 @@ class MAC_Security_Entity():
             return None
 
 class Listener():
-    def __init__(self, src):
+    def __init__(self, src, iface):
         self.src = src
+        self.iface = iface
         self.queue = queue.Queue()
         self.recent_packets = deque(maxlen=10)
 
@@ -108,7 +109,7 @@ class Listener():
 
         try:
             print(f"Listening...")
-            sniff(iface="lo", prn=handle, store=0) # TODO change iface when in production
+            sniff(iface=self.iface, prn=handle, store=0) 
         except Exception as e:
             print(f"Sniffing failed: {e}")
 
@@ -117,7 +118,8 @@ class Client_Data_Plane():
     # SecY is on the data plane
     def __init__(self):
         self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
-        self.listener = Listener(self.src)
+        self.iface = "enp7s0" # TODO change iface when in production
+        self.listener = Listener(self.src, self.iface)
         self.SecY = MAC_Security_Entity()
         
     def start_listener(self):
@@ -132,7 +134,7 @@ class Client_Data_Plane():
             frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
             try:
                 # print(f"Data: {data}")
-                sendp(frame, iface="lo", verbose=False) # TODO: change iface when in production
+                sendp(frame, iface=self.iface, verbose=False) 
                 return 0
             except Exception as e:
                 print(f"Sendp failed: {e}")
@@ -140,7 +142,7 @@ class Client_Data_Plane():
         else:
             frame = self.SecY.send_via_SA(self.src, data, secure_association)
             # frame.show()
-            sendp(frame, iface="lo", verbose=False) # TODO: change iface when in production
+            sendp(frame, iface=self.iface, verbose=False) 
             
     
 

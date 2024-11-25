@@ -15,26 +15,27 @@ def main():
             client_socket, client_addr = s.accept()
             # print(f'Connected to {client_addr}')
             count: int = 0
-            try:
-                data = client_socket.recv(1024)
-                if data:
-                    iv = data[:16]
-                    cipher = AES.new(key, AES.MODE_CBC, iv=iv)
-                    plaintext = float(unpad(cipher.decrypt(data[16:]),16))
-                    oopt = time.time() - plaintext
-                    print(f"One way ping: {oopt}")
-                    total += oopt
-                    count += 1
-            except KeyboardInterrupt:
-                s.close()
-                break
-            except Exception as e:
-                print(f"{e}")
-            
-            if count >= 100:
-                print(f"{count} pings reached avg is :{total / count}")
-                s.close()
-                break
+            while count < 100:
+                try:
+                    data = client_socket.recv(1024)
+                    if data:
+                        iv = data[:16]
+                        cipher = AES.new(key, AES.MODE_CBC, iv=iv)
+                        plaintext = float(unpad(cipher.decrypt(data[16:]),16))
+                        oopt = time.time() - plaintext
+                        print(f"One way ping: {oopt}")
+                        total += oopt
+                        count += 1
+                except KeyboardInterrupt:
+                    s.close()
+                    break
+                except Exception as e:
+                    print(f"{e}")
+                
+                if count >= 100:
+                    print(f"{count} pings reached avg is :{total / count}")
+                    s.close()
+                    break
             
     
     
