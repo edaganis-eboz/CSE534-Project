@@ -23,8 +23,9 @@ class MAC_Security_Entity():
         ciphertext, icv = cipher.encrypt_and_digest(data)
 
         iv = cipher.nonce
+        ciphertext = iv + ciphertext
 
-        macSecFrame = frame / Raw(load=serialized_sectag) / Raw(load=iv) / Raw(load=ciphertext) / Raw(load=icv)
+        macSecFrame = frame / Raw(load=serialized_sectag) / Raw(load=ciphertext) / Raw(load=icv)
         # print("\nciphertext sent: ", ciphertext, "\n")
 
         return macSecFrame

@@ -1,4 +1,5 @@
 from enum import Enum
+from scapy.all import *
 
 class Secure_Association():
     def __init__(self, sc_ID, sa_ID, dest, key):
@@ -32,3 +33,19 @@ class SA_INIT_STAGES(Enum):
     # Incomming
     STAGE_11 = 11 
 
+
+##### HEADERS ####
+    # IV is size 16
+class SecTag(Packet):
+    name = "SecTag"
+    fields_desc = [
+        ShortField("system_identifier", 0x0000),
+        ShortField("port_number", 0x0000),
+        ShortField("sa_identifier", 0x0000)
+    ]
+
+class ICV(Packet):
+    name = "ICV"
+    fields_desc = [
+        StrFixedLenField("integrity_checksum_value", b"\x00" * 16, 16)
+    ]
