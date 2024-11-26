@@ -193,7 +193,8 @@ class Client_Control_Plane():
         except KeyError:
             print(f"Secure Channel with ID:{sc_id} does not exist")
         else:
-            sa_id = randint(10000, 65535) # TODO This rand int stuff needs to check if there is no SA/SC with the same identifier
+            sa_id = 11111 # Hard coding sa_id to make this easier
+            # sa_id = randint(10000, 65535) # TODO This rand int stuff needs to check if there is no SA/SC with the same identifier
             self.key_exchange_start(sc_id, sa_id, dst)
     
     def send_via_SA(self, message, sc_id, sa_id):

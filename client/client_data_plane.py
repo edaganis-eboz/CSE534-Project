@@ -1,10 +1,11 @@
-from scapy.all import Ether, IP, UDP, sendp, Raw, ICMP
+from scapy.all import Ether, IP, UDP, sendp, Raw, ICMP, get_if_addr, get_if_hwaddr
 from scapy.sendrecv import sniff
 from Crypto.Cipher import AES
 import threading
 import queue
 from collections import deque
 import hashlib
+from util import SecTag
 
 # from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
 
@@ -13,19 +14,19 @@ class MAC_Security_Entity():
         pass
 
     def send_via_SA(self, src, data, SA):
-
+        MACSEC_ETHERTYPE = 0x0801
         cipher = AES.new(SA.key, AES.MODE_GCM) # TODO Not sure how I feel about this, do once only?
 
-        frame = Ether(src=src[0], dst=SA.destination[0])
+        frame = Ether(src=src[0], dst=SA.destination[0], type=MACSEC_ETHERTYPE)
         sectag = self.create_sectag(SA)
-        serialized_sectag = self.serialize_sectag(sectag)
+        sectag_header: SecTag = self.serialize_sectag(sectag)
 
         ciphertext, icv = cipher.encrypt_and_digest(data)
 
         iv = cipher.nonce
-        ciphertext = iv + ciphertext
+        payload = iv + ciphertext + icv
 
-        macSecFrame = frame / Raw(load=serialized_sectag) / Raw(load=ciphertext) / Raw(load=icv)
+        macSecFrame = frame / sectag_header / Raw(load=payload)
         # print("\nciphertext sent: ", ciphertext, "\n")
 
         return macSecFrame
@@ -35,35 +36,31 @@ class MAC_Security_Entity():
         return sectag
     
     def serialize_sectag(self, sectag):
-        #print("SA_ID in serialize: ", sectag['sa_ID'])
         sc_identifier = sectag['sc_ID'].to_bytes(2, 'big')
         sa_identifier = sectag['sa_ID'].to_bytes(2, 'big')
-
-        #print("sa_identifier in serialize: ",int.from_bytes(sa_identifier, 'big'))
-
         rekeying_flag = b'\x01' if sectag['re-keying'] else b'\x00'
 
-        serialized_sectag = sc_identifier+sa_identifier+rekeying_flag
+        sectag_header = SecTag(system_identifier=sc_identifier, sa_identifier=sa_identifier, rekey_flag=rekeying_flag)
 
-        return(serialized_sectag)
+        return sectag_header
 
     def receive_via_SA(self, frame):
-        eth_frame = frame[Ether]
+        IV_LENGTH: int = 16
+        ICV_LENGTH: int = 16
+        sectag_header = frame[SecTag]
         raw_payload = frame[Raw].load
-        sectag_size = 5
-        sectag = raw_payload[:sectag_size]
-        iv = raw_payload[sectag_size:sectag_size+16]
-        ciphertext = raw_payload[sectag_size+16:-16]
-        icv = raw_payload[-16:]
-        sectag_deserialized = self.deserialized_sectag(sectag)
+        iv = raw_payload[:IV_LENGTH]
+        ciphertext = raw_payload[IV_LENGTH:-ICV_LENGTH]
+        icv = raw_payload[-ICV_LENGTH:]
+        sectag_deserialized = self.deserialized_sectag(sectag_header)
         
         return (ciphertext, icv, sectag_deserialized, iv)
 
-    def deserialized_sectag(self, sectag):
-        sc_ID = int.from_bytes(sectag[:2], 'big')
-        sa_ID = int.from_bytes(sectag[2:4], 'big')
+    def deserialized_sectag(self, sectag_header: SecTag):
+        sc_ID = int.from_bytes(sectag_header.system_identifier, 'big')
+        sa_ID = int.from_bytes(sectag_header.sa_identifier, 'big')
         #print("sa_ID in deserialize: ", sa_ID)
-        rekeying = True if sectag[4] == 1 else False
+        rekeying = True if sectag_header.rekey_flag == b'\x01' else False
 
         plain_sectag = {'sc_ID': sc_ID, 'sa_ID': sa_ID,'re-keying': rekeying}
 
@@ -116,8 +113,8 @@ class Listener():
 class Client_Data_Plane():
     # SecY is on the data plane
     def __init__(self):
-        self.src = ("00:00:00:00:00:00", "127.0.0.1", 1337)
-        self.iface = "enp7s0" # TODO change iface when in production
+        self.iface = "enp7s0"
+        self.src = (get_if_hwaddr(self.iface), get_if_addr(self.iface), 1337)
         self.listener = Listener(self.src, self.iface)
         self.SecY = MAC_Security_Entity()
         

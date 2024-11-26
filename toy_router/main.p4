@@ -8,6 +8,7 @@
 
 typedef bit<48> macAddr_t;
 const bit<16> TYPE_IPV4 = 0x800;
+const bit<16> TYPE_MACSEC = 0x801;
 typedef bit<9>  egressSpec_t;
 typedef bit<32> ip4Addr_t;
 
@@ -34,6 +35,12 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
+/* MACSEC STUFF */
+header sectag_t{
+    bit<16>     system_identifier;
+    bit<16>     sa_identifier;
+    bit<8>      rekey_flag;
+}
 
 struct metadata {
     /* empty */
@@ -42,6 +49,7 @@ struct metadata {
 struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
+    sectag_t     sectag; /* MACSEC STUFF */
 }
 
 /*************************************************************************
@@ -63,6 +71,7 @@ parser MyParser(packet_in packet,
 
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType){
+            TYPE_MACSEC: parse_sectag; /* MACSEC STUFF */
             TYPE_IPV4: parse_ipv4;
             default: accept;
         }
@@ -73,6 +82,11 @@ parser MyParser(packet_in packet,
         transition select(hdr.ipv4.protocol){
             default: accept;
         }
+    }
+    /* MACSEC STUFF */
+    state parse_sectage {
+        packet.extract(hdr.sectag);
+        transition accept;
     }
 
 }
@@ -98,7 +112,7 @@ control MyIngress(inout headers hdr,
         mark_to_drop(standard_metadata);
     }
     
-     action forward(macAddr_t dstAddr, egressSpec_t port) {
+    action forward(macAddr_t dstAddr, egressSpec_t port) {
         //set the src mac address as the previous dst
         hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
 
@@ -123,11 +137,26 @@ control MyIngress(inout headers hdr,
         size = 1024;
         default_action = drop;
     }
+
+    /* MACSEC STUFF */
+    table sectag_table {
+        key = {
+            /* hdr.sectag.system_identifier: exact; */
+            hdr.sectag.sa_identifier: exact;
+            /* hdr.sectag.rekey_flag: exact; */
+        }
+        actions = {
+            forward;
+            drop;
+        }
+        size = 1024;
+    }
     
     apply {
         if(hdr.ipv4.isValid()) {
             ipv4_lpm.apply();
         }
+        sectag_table.apply();  /* MACSEC STUFF */
     }
 }
 

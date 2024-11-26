@@ -47,7 +47,7 @@ Select an Option:
                     print(f"Secure Channel created with ID: {sc_ID}")
                 elif choice == 2:
                     sc_ID = int(input("Input Secure Channel ID: "))
-                    self.Control_Plane.create_outgoing_SA(sc_ID, ("00:00:00:00:00:00", "127.0.0.1", 1337))
+                    self.Control_Plane.create_outgoing_SA(sc_ID, ("00:00:00:00:00:02", "192.168.2.10", 1337)) #alice switch MAC, bob ip
                     # target = input("Input target: ")
                 elif choice == 3:
                     self.Control_Plane.KaY.print_SCs()
@@ -72,41 +72,7 @@ Select an Option:
                 else:
                     print(f"Unknown option {e}")
 
-
-def run_test(client: Client, choice):
-    if choice == 0:
-        client.Control_Plane.KaY.load_known_hosts()
-        client.Control_Plane.KaY.print_CA()
-        client.Control_Plane.KaY.print_SCs()
-        sc_ID = client.Control_Plane.KaY.create_SC()
-        client.Control_Plane.KaY.print_SCs()
-        sa_ID = client.Control_Plane.KaY.create_SA(sc_ID, client.Control_Plane.KaY.CA_hosts['Bob'])
-        client.Control_Plane.KaY.print_SAs(sc_ID)
-    elif choice == 1:
-        listen_or_send = int(input("Options:\n(0) Listen\n(1) Send\n")) % 2
-        if listen_or_send: # 1
-            destination_port = int(input("Destination Port? "))
-            destination = ("ff:ff:ff:ff:ff:ff", "127.0.0.1", destination_port)
-            client.Data_Plane.send(b'TEST', destination)
-        else:
-            port_num = random.randint(10000, 65535)
-            mac, ip, _ = client.Data_Plane.src
-            client.Data_Plane.src = (mac, ip, port_num)
-            client.Data_Plane.cleartext_listen()
-    elif choice == 2:
-        client.Data_Plane.start_listener()
-        #client.Control_Plane.create_SA()
-    else:
-        pass
-
 if __name__ == "__main__":
     client = Client('Alice')
     
     client.interactive()
-    #run_test(client, 2)
-
-    #####
-    # Probably the way this will work is smth like, suppose we want to send a MACsec message to someone. We first go through the control plane to resolve the address to our SA,
-    # Then the cnontrol_plane object will return an SA, we will then use that SA as an input to a Data_Plane object function, send_via_SA. Then we can send our MACsec frames through
-    # there
-    #####
