@@ -205,6 +205,7 @@ class Client_Control_Plane():
         secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
         count: int = 0
         while count < n:
+            print(f'nping_count:{count}')
             t = str(time.time()).encode()
             message = PING_Messages.PING_REQUEST.value + t
             self.Data_Plane.send(message, None, secure_association=secure_association)

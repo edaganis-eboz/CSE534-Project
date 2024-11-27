@@ -43,7 +43,7 @@ header sectag_t{
 }
 
 struct metadata {
-    /* empty */
+    bit<9> egress_port;  // Store the egress port
 }
 
 struct headers {
@@ -84,7 +84,7 @@ parser MyParser(packet_in packet,
         }
     }
     /* MACSEC STUFF */
-    state parse_sectage {
+    state parse_sectag {
         packet.extract(hdr.sectag);
         transition accept;
     }
@@ -113,14 +113,17 @@ control MyIngress(inout headers hdr,
     }
     
     action forward(macAddr_t dstAddr, egressSpec_t port) {
-        //set the src mac address as the previous dst
-        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-
        //set the destination mac address that we got from the match in the table
         hdr.ethernet.dstAddr = dstAddr;
 
         //set the output port that we also get from the table
         standard_metadata.egress_spec = port;
+
+        if (port == 0) {
+            hdr.ethernet.srcAddr = 0x000000000002;
+        } else if (port == 1) {
+            hdr.ethernet.srcAddr = 0x000000000003;
+        }
 
         //decrease ttl by 1
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
@@ -204,6 +207,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
 		// parsed headers have to be added again into the packet
 		packet.emit(hdr.ethernet);
 		packet.emit(hdr.ipv4);
+        packet.emit(hrd.sectag);
 	}
 }
 

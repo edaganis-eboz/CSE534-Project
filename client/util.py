@@ -1,5 +1,6 @@
 from enum import Enum
 from scapy.all import *
+from scapy.all import Ether
 
 class Secure_Association():
     def __init__(self, sc_ID, sa_ID, dest, key):
@@ -42,4 +43,4 @@ class SecTag(Packet):
         ShortField("sa_identifier", 0x0000),
         ByteField('rekey_flag', 0x00)
     ]
-
+bind_layers(Ether, SecTag, type=0x0801 )

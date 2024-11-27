@@ -6,7 +6,7 @@ import queue
 from collections import deque
 import hashlib
 from util import SecTag
-
+import socket
 # from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
 
 class MAC_Security_Entity():
@@ -36,9 +36,9 @@ class MAC_Security_Entity():
         return sectag
     
     def serialize_sectag(self, sectag):
-        sc_identifier = sectag['sc_ID'].to_bytes(2, 'big')
-        sa_identifier = sectag['sa_ID'].to_bytes(2, 'big')
-        rekeying_flag = b'\x01' if sectag['re-keying'] else b'\x00'
+        sc_identifier = sectag['sc_ID']
+        sa_identifier = sectag['sa_ID']
+        rekeying_flag = 1 if sectag['re-keying'] else 0
 
         sectag_header = SecTag(system_identifier=sc_identifier, sa_identifier=sa_identifier, rekey_flag=rekeying_flag)
 
@@ -57,10 +57,10 @@ class MAC_Security_Entity():
         return (ciphertext, icv, sectag_deserialized, iv)
 
     def deserialized_sectag(self, sectag_header: SecTag):
-        sc_ID = int.from_bytes(sectag_header.system_identifier, 'big')
-        sa_ID = int.from_bytes(sectag_header.sa_identifier, 'big')
+        sc_ID = sectag_header.system_identifier
+        sa_ID = sectag_header.sa_identifier
         #print("sa_ID in deserialize: ", sa_ID)
-        rekeying = True if sectag_header.rekey_flag == b'\x01' else False
+        rekeying = True if sectag_header.rekey_flag == 1 else False
 
         plain_sectag = {'sc_ID': sc_ID, 'sa_ID': sa_ID,'re-keying': rekeying}
 
@@ -97,6 +97,9 @@ class Listener():
         return listener_thread.ident
 
     def listen(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind((get_if_addr(self.iface),1337)) # we need this udp port to be open just so the kernel doesnt say it isnt open
+        
         def handle(frame):
             if not self.is_duplicate(frame):
                 if Ether in frame and Raw in frame and ICMP not in frame: # TODO somehow make this only sniff our packets, original headers?
