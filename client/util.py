@@ -44,3 +44,4 @@ class SecTag(Packet):
         ByteField('rekey_flag', 0x00)
     ]
 bind_layers(Ether, SecTag, type=0x0801 )
+

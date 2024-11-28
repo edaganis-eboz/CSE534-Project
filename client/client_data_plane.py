@@ -14,7 +14,7 @@ class MAC_Security_Entity():
         pass
 
     def send_via_SA(self, src, data, SA):
-        MACSEC_ETHERTYPE = 0x0801
+        MACSEC_ETHERTYPE = 0x88E5
         cipher = AES.new(SA.key, AES.MODE_GCM) # TODO Not sure how I feel about this, do once only?
 
         frame = Ether(src=src[0], dst=SA.destination[0], type=MACSEC_ETHERTYPE)

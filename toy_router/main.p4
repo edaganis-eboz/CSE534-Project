@@ -8,7 +8,7 @@
 
 typedef bit<48> macAddr_t;
 const bit<16> TYPE_IPV4 = 0x800;
-const bit<16> TYPE_MACSEC = 0x801;
+const bit<16> TYPE_MACSEC = 0x88E5;
 typedef bit<9>  egressSpec_t;
 typedef bit<32> ip4Addr_t;
 
@@ -223,3 +223,28 @@ V1Switch(
 	MyComputeChecksum(),
 	MyDeparser()
 ) main;
+
+
+/*
+// Digest data structure to send to the control plane
+struct digest_data_t {
+    bit<16> sa_identifier;
+    bit<8>  rekey_flag;
+}
+
+control MyIngress {
+    apply {
+        // Check if the packet has a SecTag header
+        if (hdr.sectag.isValid()) {
+            // Send the sa_identifier and rekey_flag to the control plane
+            digest_data_t digest_data;
+            digest_data.sa_identifier = hdr.sectag.sa_identifier;
+            digest_data.rekey_flag = hdr.sectag.rekey_flag;
+
+            // Send a digest to the control plane
+            digest(digest_data);
+        }
+    }
+}
+
+*/
