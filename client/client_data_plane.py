@@ -5,7 +5,7 @@ import threading
 import queue
 from collections import deque
 import hashlib
-from util import SecTag
+from util import SecTag, KE_Header
 import socket
 # from client_control_plane import Secure_Channel, Secure_Association # I really dont like this
 
@@ -102,7 +102,7 @@ class Listener():
         
         def handle(frame):
             if not self.is_duplicate(frame):
-                if Ether in frame and Raw in frame and ICMP not in frame: # TODO somehow make this only sniff our packets, original headers?
+                if (Ether in frame and Raw in frame) or (Ether in frame and KE_Header in frame) and ICMP not in frame: # TODO somehow make this only sniff our packets, original headers?
                     if frame[Ether].src != self.src[0]:
                         self.queue.put(frame)
 
@@ -130,9 +130,9 @@ class Client_Data_Plane():
 
     def send(self, data, dst, secure_association = None):
         if secure_association == None:  
-            frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / UDP(dport=dst[2], sport=self.src[2]) / data
+            frame = Ether(src=self.src[0], dst=dst[0]) / IP(src=self.src[1], dst=dst[1]) / data
             try:
-                # print(f"Data: {data}")
+                frame.show()
                 sendp(frame, iface=self.iface, verbose=False) 
                 return 0
             except Exception as e:

@@ -1,4 +1,3 @@
-import random
 from client_control_plane import Client_Control_Plane
 from client_data_plane import Client_Data_Plane
 
