@@ -43,12 +43,12 @@ class SecTag(Packet):
         ShortField("sa_identifier", 0x0000),
         ByteField('rekey_flag', 0x00)
     ]
-bind_layers(Ether, SecTag, type=0x0801 )
+bind_layers(Ether, SecTag, type=0x88E5)
 
 class KE_Header(Packet):
     name = "KE_Header"
     fields_desc = [
-        BitField("stage", 0, 2),
+        ByteField("stage", 0x00),
         ShortField("system_identifier", 0x0000),
         ShortField("sa_identifier", 0x0000)
     ]

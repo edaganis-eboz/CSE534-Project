@@ -42,6 +42,12 @@ header sectag_t{
     bit<8>      rekey_flag;
 }
 
+header keyexchg_t {
+    bit<8>      state;
+    bit<16>     system_identifier;
+    bit<16>     sa_identifier;
+}
+
 struct metadata {
     bit<9> egress_port;  // Store the egress port
 }
@@ -50,6 +56,7 @@ struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
     sectag_t     sectag; /* MACSEC STUFF */
+    keyexchg_t   keyexchg;
 }
 
 /*************************************************************************
