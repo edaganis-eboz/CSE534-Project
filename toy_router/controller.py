@@ -13,46 +13,23 @@ try:
         digests = sw.ReceiveDigestList()
         for digest in digests:
             sa_identifier = digest.data['sa_identifier']
-            rekey_flag = digest.data['rekey_flag']
-            print(f"Received digest: sa_identifier={sa_identifier}, rekey_flag={rekey_flag}")
+            srcAddr = digest.data['srcAddr']
+            print(f"Received digest: sa_identifier={sa_identifier}, srcAddr={srcAddr}")
 
             # Add a rule to the switch
+            # table_add MyIngress.sectag_table MyIngress.forward 11111 => 00:00:00:00:00:04 1
             table_entry = p4info_helper.build_table_entry(
-                table_name="MyIngress.my_table",
+                table_name="MyIngress.sectag_table",
                 match_fields={
                     "hdr.sectag.sa_identifier": sa_identifier
                 },
                 action_name="MyIngress.forward",
                 action_params={
+                    "dstAddr": srcAddr,
                     "port": 1  # Forward to port 1
                 }
             )
             sw.WriteTableEntry(table_entry)
-            print(f"Added rule: sa_identifier={sa_identifier} -> port 1")
+            print(f"Added rule: sa_identifier={sa_identifier} -> {srcAddr} port 1")
 finally:
     exit(0)
-
-
-
-"""
-// Digest data structure to send to the control plane
-struct digest_data_t {
-    bit<16> sa_identifier;
-    bit<8>  rekey_flag;
-}
-
-control MyIngress {
-    apply {
-        // Check if the packet has a SecTag header
-        if (hdr.sectag.isValid()) {
-            // Send the sa_identifier and rekey_flag to the control plane
-            digest_data_t digest_data;
-            digest_data.sa_identifier = hdr.sectag.sa_identifier;
-            digest_data.rekey_flag = hdr.sectag.rekey_flag;
-
-            // Send a digest to the control plane
-            digest(digest_data);
-        }
-    }
-}
-"""

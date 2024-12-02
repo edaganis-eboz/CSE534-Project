@@ -9,6 +9,7 @@
 typedef bit<48> macAddr_t;
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<16> TYPE_MACSEC = 0x88E5;
+const bit<8> TYPE_IPV4_KE = 0x92;
 typedef bit<9>  egressSpec_t;
 typedef bit<32> ip4Addr_t;
 
@@ -52,6 +53,11 @@ struct metadata {
     bit<9> egress_port;  // Store the egress port
 }
 
+struct digest_data_t {
+    bit<16>     sa_identifier;
+    macAddr_t   srcAddr;
+}
+
 struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
@@ -87,12 +93,18 @@ parser MyParser(packet_in packet,
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
         transition select(hdr.ipv4.protocol){
+            TYPE_IPV4_KE: parse_ke_header;
             default: accept;
         }
     }
     /* MACSEC STUFF */
     state parse_sectag {
         packet.extract(hdr.sectag);
+        transition accept;
+    }
+
+    state parse_ke_header {
+        packet.extract(hdr.keyexchg);
         transition accept;
     }
 
@@ -164,6 +176,16 @@ control MyIngress(inout headers hdr,
     
     apply {
         if(hdr.ipv4.isValid()) {
+            if (hdr.keyexchg.isValid()){
+                if (hdr.keyexchg.state == 0x3){
+                digest_data_t digest_data;
+                digest_data.sa_identifier = hdr.sectag.sa_identifier;
+                digest_data.srcAddr = hdr.ethernet.srcAddr;
+
+                // Send a digest to the control plane
+                digest(digest_data);
+                }
+            }
             ipv4_lpm.apply();
         }
         sectag_table.apply();  /* MACSEC STUFF */
@@ -214,6 +236,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
 		// parsed headers have to be added again into the packet
 		packet.emit(hdr.ethernet);
 		packet.emit(hdr.ipv4);
+        packet.emit(hdr.keyexchg);
         packet.emit(hrd.sectag);
 	}
 }
