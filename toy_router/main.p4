@@ -49,13 +49,14 @@ header keyexchg_t {
     bit<16>     sa_identifier;
 }
 
-struct metadata {
-    bit<9> egress_port;  // Store the egress port
-}
-
-struct digest_data_t {
+struct controller_metadata_t {
     bit<16>     sa_identifier;
     macAddr_t   srcAddr;
+}
+
+struct metadata {
+    bit<9> egress_port;  // Store the egress port
+    controller_metadata_t controller_md;
 }
 
 struct headers {
@@ -163,9 +164,7 @@ control MyIngress(inout headers hdr,
     /* MACSEC STUFF */
     table sectag_table {
         key = {
-            /* hdr.sectag.system_identifier: exact; */
             hdr.sectag.sa_identifier: exact;
-            /* hdr.sectag.rekey_flag: exact; */
         }
         actions = {
             forward;
@@ -175,17 +174,7 @@ control MyIngress(inout headers hdr,
     }
     
     apply {
-        if(hdr.ipv4.isValid()) {
-            if (hdr.keyexchg.isValid()){
-                if (hdr.keyexchg.state == 0x3){
-                digest_data_t digest_data;
-                digest_data.sa_identifier = hdr.sectag.sa_identifier;
-                digest_data.srcAddr = hdr.ethernet.srcAddr;
-
-                // Send a digest to the control plane
-                digest(digest_data);
-                }
-            }
+        if(hdr.ipv4.isValid()){  
             ipv4_lpm.apply();
         }
         sectag_table.apply();  /* MACSEC STUFF */
@@ -237,7 +226,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
 		packet.emit(hdr.ethernet);
 		packet.emit(hdr.ipv4);
         packet.emit(hdr.keyexchg);
-        packet.emit(hrd.sectag);
+        packet.emit(hdr.sectag);
 	}
 }
 

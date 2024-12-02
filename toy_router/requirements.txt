@@ -1,1 +1,4 @@
 p4runtime==1.4.1
+grpcio==1.68.1
+grpcio-tools
+protobug==3.20.3
