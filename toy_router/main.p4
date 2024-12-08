@@ -56,7 +56,7 @@ struct controller_metadata_t {
 
 struct metadata {
     bit<9> egress_port;  // Store the egress port
-    controller_metadata_t controller_md;
+    // controller_metadata_t controller_md;
 }
 
 struct headers {
@@ -132,6 +132,11 @@ control MyIngress(inout headers hdr,
         mark_to_drop(standard_metadata);
     }
     
+    action send_to_controller() {
+    // Set the standard metadata to indicate the CPU port (typically 255)
+    standard_metadata.egress_spec = 255;
+    }
+    
     action forward(macAddr_t dstAddr, egressSpec_t port) {
        //set the destination mac address that we got from the match in the table
         hdr.ethernet.dstAddr = dstAddr;
@@ -154,6 +159,7 @@ control MyIngress(inout headers hdr,
             hdr.ipv4.dstAddr: lpm;
         }
         actions = {
+            // send_to_controller;
             forward;
             drop;
         }
