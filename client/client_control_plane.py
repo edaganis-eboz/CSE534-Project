@@ -132,15 +132,12 @@ class Client_Control_Plane():
     def get_src_info(frame):
         eth = frame.getlayer(Ether)
         ip = frame.getlayer(IP)
-        transport = frame.getlayer(UDP)
     
-        
-        if eth and ip and transport:
+        if eth and ip:
             src_eth = eth.src        
             src_ip = ip.src          
-            src_port = transport.sport  
 
-            return (src_eth, src_ip, src_port)
+            return (src_eth, src_ip)
         else:
             return None 
     
@@ -148,33 +145,35 @@ class Client_Control_Plane():
     def process_frame(self, frame):
         with self.lock:
             # frame.show()
-            if Raw in frame:
+            if KE_Header in frame:
                 try:
-                    protocol = KE_Protocol_Messages((frame[Raw].load)[:12])
-                    if protocol == KE_Protocol_Messages.SA_KE_REQUEST:
+                    stage = KE_Protocol_Messages(frame[KE_Header].stage)
+                    if stage == KE_Protocol_Messages.SA_KE_REQUEST:
                         self.key_exchange_accept(frame)
-                    elif protocol == KE_Protocol_Messages.SA_KE_ACCEPT:
+                    elif stage == KE_Protocol_Messages.SA_KE_ACCEPT:
                         self.key_exchange_send_pubkey(frame)
-                    elif protocol == KE_Protocol_Messages.SA_KE_PUBKEY:
+                    elif stage == KE_Protocol_Messages.SA_KE_PUBKEY:
                         self.key_exchange_send_encrypted_secret(frame)
-                    elif protocol == KE_Protocol_Messages.SA_KE_SECRET:
+                    elif stage == KE_Protocol_Messages.SA_KE_SECRET:
                         self.key_exchange_create_outgoing(frame)
                     else:
-                        print(f"Message: {protocol}")
+                        print(f"Message: {stage}")
                 except Exception as e:
+                    print(f"AAAAAAAAAAAA {e}")
+            elif Raw in frame:
+                try:
+                    ciphertext, icv, sectag_deserialized, iv = self.Data_Plane.SecY.receive_via_SA(frame)
+                    sc_id = -1
+                    sa_id = sectag_deserialized['sa_ID']
+                    secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
+                    plaintext = self.Data_Plane.SecY.decrypt_data(ciphertext, icv, secure_association.key, iv)
                     try:
-                        ciphertext, icv, sectag_deserialized, iv = self.Data_Plane.SecY.receive_via_SA(frame)
-                        sc_id = -1
-                        sa_id = sectag_deserialized['sa_ID']
-                        secure_association = self.KaY.secure_channels[sc_id].associations[sa_id]
-                        plaintext = self.Data_Plane.SecY.decrypt_data(ciphertext, icv, secure_association.key, iv)
-                        try:
-                            ping = PING_Messages(plaintext[:12])
-                            self.receive_nping(plaintext)
-                        except ValueError:
-                            print(f"Recieved Decrypted Plaintext: {plaintext}")
-                    except Exception as e:
-                        print(f"Decryption Failed: {e}")
+                        ping = PING_Messages(plaintext[:12])
+                        self.receive_nping(plaintext)
+                    except ValueError:
+                        print(f"Recieved Decrypted Plaintext: {plaintext}")
+                except Exception as e:
+                    print(f"Decryption Failed: {e}")
 
 
 
@@ -232,36 +231,56 @@ class Client_Control_Plane():
 
     # TODO This needs to be in try except blocks as well
     def key_exchange_start(self, sc_id, sa_id, dst): # I dont know how I feel about this, this is done in plaintext, so it should be okay to be outisde of KaY
-        message = KE_Protocol_Messages.SA_KE_REQUEST.value+str(sc_id).encode()+str(sa_id).encode()
+        header = KE_Header(stage=KE_Protocol_Messages.SA_KE_REQUEST.value,
+                           system_identifier=sc_id,
+                           sa_identifier=sa_id
+                           )
+        message = header
         self.Data_Plane.send(message, dst)
 
     def key_exchange_accept(self, frame):
         return_addr = self.get_src_info(frame)
-        sc_id = (frame[Raw].load)[12:17]
-        sa_id = (frame[Raw].load)[17:22]
-        message = KE_Protocol_Messages.SA_KE_ACCEPT.value+ sc_id + sa_id
+        sc_id = frame[KE_Header].system_identifier
+        sa_id = frame[KE_Header].sa_identifier
+        header = KE_Header(stage=KE_Protocol_Messages.SA_KE_ACCEPT.value,
+                           system_identifier=sc_id,
+                           sa_identifier=sa_id
+                           )
+        message = header
         self.Data_Plane.send(message, return_addr)
         
     def key_exchange_send_pubkey(self, frame):
         return_addr = self.get_src_info(frame)
-        sc_id = (frame[Raw].load)[12:17]
-        sa_id = (frame[Raw].load)[17:22]
+        sc_id = frame[KE_Header].system_identifier
+        sa_id = frame[KE_Header].sa_identifier
         try:
             # assert self.RSA_Key != None
-            key_message = KE_Protocol_Messages.SA_KE_PUBKEY.value + sc_id + sa_id + self.RSA_Key.publickey().export_key(format='PEM')
-            self.Data_Plane.send(key_message, return_addr)
+            header = KE_Header(stage=KE_Protocol_Messages.SA_KE_PUBKEY.value,
+                           system_identifier=sc_id,
+                           sa_identifier=sa_id
+                           )
+            key_message = self.RSA_Key.publickey().export_key(format='PEM')
+            message = header / Raw(key_message)
+            self.Data_Plane.send(message, return_addr)
         except AssertionError:
             print("No key")
 
     def key_exchange_send_encrypted_secret(self, frame):
         return_addr = self.get_src_info(frame)
-        sc_id = (frame[Raw].load)[12:17]
-        sa_id = (frame[Raw].load)[17:22]
-        pubkey = RSA.import_key((frame[Raw].load)[22:])
+        sc_id = frame[KE_Header].system_identifier
+        sa_id = frame[KE_Header].sa_identifier
+
+        pubkey = RSA.import_key(frame[Raw].load)
         secret = urandom(32)
         cipher = PKCS1_OAEP.new(pubkey)
         encrypted_secret = cipher.encrypt(secret)
-        message = KE_Protocol_Messages.SA_KE_SECRET.value+ sc_id + sa_id + encrypted_secret
+
+        header = KE_Header(stage=KE_Protocol_Messages.SA_KE_SECRET.value,
+                           system_identifier=sc_id,
+                           sa_identifier=sa_id
+                           )
+
+        message = header / Raw(encrypted_secret)
         self.Data_Plane.send(message, return_addr)
         
         # create a incomming SA
@@ -269,9 +288,9 @@ class Client_Control_Plane():
 
     def key_exchange_create_outgoing(self, frame):
         return_addr = self.get_src_info(frame)
-        sc_id = int((frame[Raw].load)[12:17])
-        sa_id = int((frame[Raw].load)[17:22])
-        encrypted_secret = (frame[Raw].load)[22:]
+        sc_id = frame[KE_Header].system_identifier
+        sa_id = frame[KE_Header].sa_identifier
+        encrypted_secret = frame[Raw].load
         cipher = PKCS1_OAEP.new(self.RSA_Key)
         shared_secret = cipher.decrypt(encrypted_secret)
         if shared_secret != None:
