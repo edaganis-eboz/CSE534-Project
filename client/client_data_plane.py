@@ -102,7 +102,7 @@ class Listener():
         
         def handle(frame):
             if not self.is_duplicate(frame):
-                if (Ether in frame and Raw in frame) or (Ether in frame and KE_Header in frame) and ICMP not in frame: # TODO somehow make this only sniff our packets, original headers?
+                if ((Ether in frame and Raw in frame) or (Ether in frame and KE_Header in frame)) and (ICMP not in frame): 
                     if frame[Ether].src != self.src[0]:
                         self.queue.put(frame)
 

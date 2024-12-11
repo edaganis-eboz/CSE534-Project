@@ -1,35 +1,19 @@
 # This is our CSE534 project, Ft. Erin O. and Zach D.
 
-## TODO
+### How to Run
+First, install all the python requirements in ```requirements.txt```
+Clients are both hosts and clients, but for testing purposes, some addresses were hard coded so there is only one way communcation. The default interfaces in FABRIC were ```enp7s0```, so that is reflected in ```client_data_plane.py```
 
-### Controllers
+To start the p4 server on a switch, first compile ```toy_router/main.p4``` with the command ```p4c main.p4```. In the topology we used, the command to start the p4 switch is: ```sudo simple_switch -i 0@enp7s0 -i 1@enp8s0 main.json &```
 
-Controllers are in charge of some of the keys and more importantly are in charge of routing.
+Then run ```chmod +x rules.sh && ./rules.sh``` to populate the match-action tables for the switch
 
-### Hosts
+To start the python clients, run ```sudo -E python3 client.py```, first create a secure channel, and then create a secure association within that secure channel. Once that is complete, you can start a latency test that will send 100 messages and get the average latency at the other end.
 
-Hosts are the hosts, they need to send packets in the correct ways and have proper key generation. For testing purposes I would like to quickly add and remove hosts. Docker might be a must here
+### ToDo
+We never got a python controller to work, the dependencies were so huge, and the documentation so esoteric, it became infeasaible. In theory, the controller would see that a key exchange occurs between two hosts, and automattically at an entry to the sectag match-action table in the p4 switch, instead of having to run a bash script to populate the table. 
 
-
-
-#### Goals for after meeting 1
-
-Code hosts that properly generate keys, and be able to save them to file. Hosts with already created certs should be able to load them back up. GRPC? Figure out what the purpose of that was in the orignal paper. We want the hosts to use SCAPY to create the MACsec packets. It is our belief that if we do this, we will get a better understanding of the packet structure and modify it easier if need be. We want the hosts to be able to communicate. After meeting 2 we will introduce the local controllers.
-- Key generation/Saving (done)
-- Structure of MACsec packets (done)
-- Interclient communcation (done)
-
-
-#### Goals for after meeting 2
-- Experimental setup for this week 2 hosts and a switch in between
-
-- Get routers done, how to run it on a virtual switch
-- P4 
-- Get 2 hosts with dummy certs to communicate. 
-- Write first draft of paper
-
-
-
-#### Goals for next draft
-- Key agreement, key agreement via LC (in clear)
-- Look at how address resolutions works with the SA, SC, AKA how would a switch in an SA forward a packet in an SC. 
+### What else is included
+```cleartext_ping/``` includes files that test cleartext latency. ```L4_enc/``` includes files that test layer 4 encryption. 
+### Run on FABRIC
+Follow the Jupyter notebook in the Repo. You will need to SSH into the individual nodes in order to run the latency tests. To install the p4 software on the switch, make sure the line ```switch.upload_file('install_bmv2.sh', 'install_bmv2.sh')``` works properly.
